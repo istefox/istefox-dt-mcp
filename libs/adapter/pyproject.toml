@@ -1,0 +1,25 @@
+[project]
+name = "istefox-dt-mcp-adapter"
+version = "0.0.1"
+description = "Bridge adapters for DEVONthink — JXA pool, x-callback-url, DT Server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Stefano Ferri", email = "stefano@stefer.it" }]
+
+dependencies = [
+    "pydantic>=2.7",
+    "structlog>=24.1",
+    # Workspace siblings
+    "istefox-dt-mcp-schemas",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+istefox-dt-mcp-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/istefox_dt_mcp_adapter"]

@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+wheels/
+*.whl
+
+# uv
+.uv/
+uv.lock
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Linting / type checking
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Project-specific
+# RAG vector DB (must NEVER be committed - contains user data)
+~/.local/share/istefox-dt-mcp/
+data/vectors/
+data/cache/
+data/audit/
+*.sqlite
+*.sqlite3
+*.db
+
+# Secrets & local config
+.env
+.env.*
+!.env.example
+config.local.toml
+secrets/
+
+# OS
+Thumbs.db

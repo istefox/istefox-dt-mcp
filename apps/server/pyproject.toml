@@ -1,0 +1,40 @@
+[project]
+name = "istefox-dt-mcp-server"
+version = "0.0.1"
+description = "MCP server for DEVONthink 4 (FastMCP, dual-transport stdio + streamable HTTP)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Stefano Ferri", email = "stefano@stefer.it" }]
+
+dependencies = [
+    # MCP framework + validation
+    "fastmcp>=0.2",
+    "pydantic>=2.7",
+    # Logging / observability
+    "structlog>=24.1",
+    "opentelemetry-sdk>=1.25",
+    # Workspace siblings
+    "istefox-dt-mcp-adapter",
+    "istefox-dt-mcp-schemas",
+]
+
+[project.optional-dependencies]
+http = [
+    "uvicorn>=0.30",
+    "authlib>=1.3",
+]
+
+[project.scripts]
+istefox-dt-mcp = "istefox_dt_mcp_server.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+istefox-dt-mcp-adapter = { workspace = true }
+istefox-dt-mcp-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/istefox_dt_mcp_server"]
