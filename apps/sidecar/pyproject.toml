@@ -1,0 +1,32 @@
+[project]
+name = "istefox-dt-mcp-sidecar"
+version = "0.0.1"
+description = "RAG sidecar for DEVONthink MCP — vector DB (ChromaDB) + embeddings + IPC"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Stefano Ferri", email = "stefano@stefer.it" }]
+
+dependencies = [
+    # Vector DB
+    "chromadb>=0.5",
+    # Embeddings (multilingual: bge-m3 / multilingual-e5-large)
+    "sentence-transformers>=3.0",
+    # Logging
+    "structlog>=24.1",
+    # Workspace siblings
+    "istefox-dt-mcp-schemas",
+]
+
+[project.scripts]
+istefox-dt-mcp-sidecar = "istefox_dt_mcp_sidecar.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+istefox-dt-mcp-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/istefox_dt_mcp_sidecar"]
