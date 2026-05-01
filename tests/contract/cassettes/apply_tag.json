@@ -1,0 +1,5 @@
+{
+  "script": "apply_tag.js",
+  "argv": ["REC-TAG-0001-AAAA-BBBBCCCCDDDD", "urgente"],
+  "stdout": "{\"uuid\":\"REC-TAG-0001-AAAA-BBBBCCCCDDDD\",\"tags_after\":[\"fattura\",\"2026\",\"urgente\"]}"
+}

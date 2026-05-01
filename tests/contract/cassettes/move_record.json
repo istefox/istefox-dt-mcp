@@ -1,0 +1,5 @@
+{
+  "script": "move_record.js",
+  "argv": ["REC-MOVE-0001-AAAA-BBBBCCCCDDDD", "privato/archivio/2026"],
+  "stdout": "{\"uuid\":\"REC-MOVE-0001-AAAA-BBBBCCCCDDDD\",\"location\":\"/archivio/2026/\"}"
+}
