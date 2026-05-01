@@ -51,13 +51,18 @@ function run(argv) {
     if (!ru) continue;
     // DT compare() includes the seed itself in results — skip it.
     if (ru === uuid) continue;
+    // Same reference_url fallback as search_bm25/get_record so
+    // related results always carry a usable deep link.
+    var refUrl = safeStr(function() { return r.referenceUrl(); });
+    if (!refUrl) refUrl = "x-devonthink-item://" + ru;
+
     result.push({
       uuid: ru,
       name: safeStr(function() { return r.name(); }),
       // DT4 may expose .score() on compare results; fall back to null.
       similarity: safe(function() { return r.score(); }, null),
       location: safeStr(function() { return r.location(); }),
-      reference_url: safeStr(function() { return r.referenceUrl(); })
+      reference_url: refUrl
     });
   }
   return JSON.stringify(result);
