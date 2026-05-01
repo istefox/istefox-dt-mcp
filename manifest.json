@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "istefox-dt-mcp",
   "display_name": "DEVONthink MCP (istefox)",
-  "version": "0.0.23",
+  "version": "0.0.24",
   "description": "MCP server for DEVONthink 4 — outcome-oriented tools, RAG-augmented, privacy-first.",
   "long_description": "Connettore MCP best-in-class per DEVONthink 4. Sei tool MCP operativi end-to-end: list_databases, search (BM25 + vector + hybrid RRF), find_related, ask_database (vector + BM25 fallback), file_document e bulk_apply (entrambi preview-then-apply con audit log e undo selettivo). RAG locale opzionale via ChromaDB embedded. Tutti i dati restano sulla macchina: nessuna telemetry, embedding generati localmente, audit log SQLite append-only.",
   "author": {
