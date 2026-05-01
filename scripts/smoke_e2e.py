@@ -57,7 +57,7 @@ async def main() -> int:
     cache = SQLiteCache(
         path="/tmp/istefox_smoke_cache.sqlite", default_ttl_s=60.0
     )
-    adapter = JXAAdapter(pool_size=4, timeout_s=10.0, cache=cache)
+    adapter = JXAAdapter(pool_size=4, timeout_s=15.0, cache=cache)
 
     # --- health ---
     health = await adapter.health_check()
@@ -66,9 +66,19 @@ async def main() -> int:
         print("DEVONthink not running — abort.")
         return 1
 
+    # --- warmup (excluded from latency stats: covers cold-start) ---
+    print("[warmup] priming JXA + cache")
+    try:
+        await adapter.list_databases()
+        await adapter.search("a", max_results=1)
+    except AdapterError as e:
+        print(f"  warmup FAIL ({type(e).__name__}): {e}")
+        return 1
+    print("  done\n")
+
     all_samples: dict[str, list[float]] = {}
 
-    # --- list_databases (cache disabled by hitting twice + invalidating) ---
+    # --- list_databases ---
     print("[list_databases]")
     samples, dbs = await _measure("list_databases", adapter.list_databases)
     all_samples["list_databases"] = samples
@@ -93,6 +103,9 @@ async def main() -> int:
                 print(f"      • {r.name[:78]}")
         except AdapterError as e:
             print(f"  [search '{q}'] FAIL: {type(e).__name__}: {e}")
+            stderr = getattr(e, "stderr", "")
+            if stderr:
+                print(f"    stderr: {stderr[:300]}")
 
     # --- find_related (uses first hit of last successful search) ---
     print("\n[find_related]")
@@ -112,6 +125,9 @@ async def main() -> int:
             print("  no seed record available")
     except AdapterError as e:
         print(f"  FAIL: {type(e).__name__}: {e}")
+        stderr = getattr(e, "stderr", "")
+        if stderr:
+            print(f"    stderr: {stderr[:300]}")
 
     # --- W2 GO/NO-GO summary ---
     print("\n=== W2 GO/NO-GO checkpoint ===")

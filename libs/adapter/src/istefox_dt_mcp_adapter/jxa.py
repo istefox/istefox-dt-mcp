@@ -301,6 +301,7 @@ class JXAAdapter(DEVONthinkAdapter):
                     attempt=attempt + 1,
                     backoff_s=backoff,
                     error=str(e),
+                    stderr=getattr(e, "stderr", "")[:500],
                 )
                 await asyncio.sleep(backoff)
         assert last_exc is not None
