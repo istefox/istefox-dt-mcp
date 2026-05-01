@@ -14,6 +14,61 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.18] — 2026-05-01 — Multi-step undo + uv detection portatile + ADR-008 framework
+
+Tre miglioramenti post-MVP consolidati in una release.
+
+### Added — Multi-step undo per `bulk_apply`
+- **`undo_audit` ora gestisce `tool_name=bulk_apply`**:
+  - Legge `after_state.applied` (lista ops applicate con payload)
+  - Legge `after_state.pre_move_snapshots` (locazioni originali per ops `move`)
+  - Calcola gli inversi: `add_tag↔remove_tag` (mechanico via payload),
+    `move↔move-back` (richiede snapshot)
+  - Applica in ordine **LIFO** (l'ultima op applicata è la prima
+    revertita — coerente con interazioni locali tra op)
+  - `dry_run=True` mostra il piano inverso senza mutare; `dry_run=False`
+    applica best-effort (un fallimento non aborta gli altri)
+- **`bulk_apply` ora cattura `pre_move_snapshots`** prima di ogni op
+  `move`: chiama `get_record(uuid)` per leggere la location attuale,
+  la salva. Costo: una `get_record` extra per op move (acceptable).
+  Se la snapshot fallisce, l'op viene marcata `failed` invece di
+  applicata-senza-undo (safety: niente apply senza undo possibile).
+- **4 test unit nuovi** in `test_undo.py`:
+  - `test_undo_bulk_apply_dry_run_returns_inverse_plan` — verifica LIFO + payload completo
+  - `test_undo_bulk_apply_applies_inverse_ops` — apply test con mock adapter
+  - `test_undo_bulk_apply_skips_move_without_snapshot` — safety per move senza snap
+  - `test_undo_bulk_apply_no_applied_ops_reports_nothing` — graceful empty case
+
+### Added — `uv` detection runtime portatile
+- **`bundle_main.sh`** wrapper bash: cerca `uv` in path standard
+  (`/opt/homebrew/bin/uv`, `/usr/local/bin/uv`, `~/.cargo/bin/uv`,
+  `~/.local/bin/uv`, `~/.local/share/pipx/venvs/uv/bin/uv`),
+  fallback a `command -v uv` su PATH. Errore esplicito con istruzioni
+  di install se nessun candidato è trovato.
+- **`manifest.json` aggiornato**: `command: "/bin/bash"` +
+  `args: ["${__dirname}/bundle_main.sh"]`. Sostituisce il path
+  hardcoded `/opt/homebrew/bin/uv` di v0.0.15-0.0.17 (Apple Silicon
+  Homebrew only) → portatile su Intel Mac, cargo install, pipx install.
+- **Build script aggiornato**: include `bundle_main.sh` nella bundle.
+
+### Added — ADR-008 + benchmark embedding model
+- **`docs/adr/0008-embedding-model-selection.md`** (Status: Proposed):
+  documenta la scelta MiniLM vs bge-m3, criteri di valutazione
+  (recall@k, MRR, latency, memory), metodologia, criteri di
+  promozione (`recall@5 ≥ +15%`, `MRR ≥ +0.10`, `latency p95 < 500ms`).
+- **`scripts/benchmark_embeddings.py`**: framework per il benchmark.
+  L'esecuzione richiede DT4 in esecuzione + un gold set di 10-20
+  query manuali con expected_uuid noti (`GOLD_QUERIES` da popolare
+  prima del run). Output: tabella comparativa side-by-side + JSON
+  report. Costo: ~15-20min totale (bge-m3 download ~2.2GB).
+
+### Verified
+- 137 test unit pass (era 133, +4 multi-step undo)
+- mypy strict + ruff + black puliti
+- Server bumped a v0.0.18
+
+---
+
 ## [0.0.17] — 2026-05-01 — Fix: script JXA write defensive (no più JXA_ERROR opaco)
 
 ### Fixed
