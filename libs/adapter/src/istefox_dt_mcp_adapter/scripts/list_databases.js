@@ -35,7 +35,11 @@ function run() {
       name: safeStr(function() { return d.name(); }),
       path: safeStr(function() { return d.path(); }),
       is_open: true,
-      record_count: null
+      // DT exposes the full content set via d.contents(); .length
+      // is the recursive record count. Wrapped in safe() so a slow
+      // or unsupported call falls back to null instead of aborting
+      // the whole listing.
+      record_count: safe(function() { return d.contents().length; }, null)
     });
   }
   return JSON.stringify(result);
