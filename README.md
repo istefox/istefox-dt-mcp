@@ -184,9 +184,35 @@ automatico (launchd)".
 
 ---
 
-## Integrazione Claude Desktop (W2 preview)
+## Integrazione Claude Desktop
 
-Aggiungi a `~/Library/Application Support/Claude/claude_desktop_config.json`:
+### Opzione A — `.mcpb` desktop extension (consigliata, W11)
+
+```bash
+# Build del bundle (richiede solo: bash + zip + unzip)
+./scripts/build_mcpb.sh
+# Output: dist/istefox-dt-mcp-<version>.mcpb (~270 KB)
+```
+
+Poi in Claude Desktop:
+
+1. **Settings → Developer → Install Bundle** → seleziona il `.mcpb`
+2. Oppure trascina il file `.mcpb` sulla finestra di Claude Desktop
+
+Claude Desktop si occupa di Python + `uv sync` automaticamente al primo
+avvio. Il bundle usa `server.type=uv`: la host application possiede
+il lifecycle del runtime, l'utente non deve installare dipendenze.
+
+**Permessi macOS Automation**: alla prima invocazione di un tool che
+parla con DEVONthink (es. `list_databases`), macOS mostrerà il dialog
+di consenso "Claude wants to control DEVONthink". Cliccare **OK**.
+Se non viene mostrato (consenso negato in passato), abilita
+manualmente in *System Settings → Privacy & Security → Automation →
+Claude → DEVONthink*.
+
+### Opzione B — config manuale `claude_desktop_config.json`
+
+Per workflow di sviluppo senza build del bundle:
 
 ```json
 {
@@ -199,7 +225,15 @@ Aggiungi a `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Poi riavvia Claude Desktop. I 3 tool read-only (`list_databases`, `search`, `find_related`) sono disponibili.
+Path: `~/Library/Application Support/Claude/claude_desktop_config.json`.
+Riavvia Claude Desktop. Tutti i 6 tool (`list_databases`, `search`,
+`find_related`, `ask_database`, `file_document`, `bulk_apply`) sono
+disponibili.
+
+> RAG e altre opzioni: per ora si configurano via env var nel
+> processo che lancia `claude` (Opzione B) o restano sui default per
+> il bundle (Opzione A — `user_config` integration arriva in una
+> iterazione futura).
 
 ---
 

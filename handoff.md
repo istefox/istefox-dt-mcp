@@ -79,6 +79,30 @@
 
 ---
 
+## W11 status (2026-05-01) — .mcpb desktop extension packaging
+
+W11 chiuso. Bundle `.mcpb` installabile one-click in Claude Desktop:
+- `manifest.json` (v0.4, `server.type=uv`, `entry_point=bundle_main.py`)
+- `bundle_main.py` wrapper standalone (default `serve` sub-command)
+- `scripts/build_mcpb.sh` — build script (78 file, ~270 KB output)
+- README sezione Claude Desktop riscritta (Opzione A `.mcpb` /
+  Opzione B config JSON manuale)
+- Server bumped a 0.0.11. CHANGELOG v0.0.11.
+
+**Limitations da risolvere in iterazione successiva**:
+- `user_config` MCPB non collegato a env vars `ISTEFOX_*` (richiede
+  E2E test con Claude Desktop per capire la semantica per
+  `server.type=uv`)
+- No code signing del bundle (Apple Developer ID required)
+
+**Pendenze post-MVP residue**:
+- Multi-step undo (chain audit_ids per `bulk_apply`)
+- ADR-008 model selection benchmark
+- HTTP transport + OAuth (W8+ originale, deferred a v2)
+- Test strategy Tier 2-4 (W9 originale)
+
+---
+
 ## W10 status (2026-05-01) — after_state esplicito nell'audit log
 
 W10 chiuso (post-MVP hardening dell'undo):
