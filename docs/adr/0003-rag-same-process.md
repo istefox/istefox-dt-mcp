@@ -55,6 +55,15 @@ Migrare a processo separato solo se metriche di production lo richiedono:
 
 Se fail: rivalutare ADR-002, possibile early-promotion a sidecar separato in W5-6.
 
+### ✅ Esito spike (2026-05-01)
+
+**PASS con margine ampio.** Misure: query p95 5.5 ms (60x sotto target),
+memory peak 1147 MB (38% del budget), 0 errori su 30K query + 3K write.
+Modello usato come proxy: `paraphrase-multilingual-MiniLM-L12-v2`
+(384-dim). Bge-m3 da ri-misurare in W5 (delta atteso solo su encoding).
+Report completo: [`docs/spikes/2026-05-01-chromadb-stress-test.md`](../spikes/2026-05-01-chromadb-stress-test.md).
+**ADR-003 confermato**, procedere con `ChromaRAGProvider` in W5.
+
 ## Conseguenze
 
 - ✅ Packaging `.mcpb` più semplice
