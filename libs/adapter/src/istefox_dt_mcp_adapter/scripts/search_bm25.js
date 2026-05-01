@@ -68,11 +68,19 @@ function run(argv) {
     var kind = safeStr(function() { return r.type(); });
     if (kinds.length > 0 && kinds.indexOf(kind) === -1) continue;
 
+    // DT4's referenceUrl() is the canonical x-devonthink-item:// link.
+    // For some special records (smart group, feed item, missing file
+    // placeholder) the property may return empty/null even though the
+    // uuid is valid. Fall back to constructing the URL from uuid so
+    // callers always get a usable deep link.
+    var refUrl = safeStr(function() { return r.referenceUrl(); });
+    if (!refUrl) refUrl = "x-devonthink-item://" + uuid;
+
     result.push({
       uuid: uuid,
       name: safeStr(function() { return r.name(); }),
       location: safeStr(function() { return r.location(); }),
-      reference_url: safeStr(function() { return r.referenceUrl(); }),
+      reference_url: refUrl,
       // DT4 may expose .score() on search results (relevance 0..1).
       // Falls back to null if the property isn't accessible.
       score: safe(function() { return r.score(); }, null),
