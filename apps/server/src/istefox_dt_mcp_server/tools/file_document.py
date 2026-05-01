@@ -33,7 +33,7 @@ from istefox_dt_mcp_schemas.tools import (
     FileDocumentResult,
 )
 
-from ._common import safe_call, validate_confirm_token
+from ._common import safe_call, validate_confirm_token, validate_destination_path
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -172,6 +172,12 @@ async def _build_preview(
     destination: str | None = None
 
     if input.destination_hint:
+        # Server-side validation: catch typos like "/Triage" (missing
+        # database prefix) immediately with a helpful list of available
+        # databases, instead of waiting for the JXA bridge to fail.
+        # Also runs in dry_run so the preview can't promise something
+        # apply would reject.
+        await validate_destination_path(deps, input.destination_hint)
         destination = input.destination_hint
     elif input.auto_classify:
         try:
