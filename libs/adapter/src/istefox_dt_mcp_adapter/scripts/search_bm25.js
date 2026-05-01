@@ -1,6 +1,11 @@
 // BM25 search via DEVONthink native engine.
 // argv: [query, max_results, databases_json, kinds_json]
 // stdout: JSON array of {uuid, name, location, reference_url, score, snippet}
+//
+// Defensive: every property access is wrapped in safe() because DT
+// records of unusual kind (smart group, feed item, missing files)
+// can fail with -1700 errAECoercionFail when serialized naively.
+// Records that fail entirely are skipped, not aborted.
 
 function run(argv) {
   var DT = Application("DEVONthink");
@@ -14,12 +19,24 @@ function run(argv) {
   var dbNames = JSON.parse(argv[2] || "[]");
   var kinds = JSON.parse(argv[3] || "[]");
 
-  var searchOpts = { in: undefined };
+  function safe(fn, def) {
+    try {
+      var v = fn();
+      return v === undefined || v === null ? def : v;
+    } catch (e) {
+      return def;
+    }
+  }
+
+  function safeStr(fn) { return String(safe(fn, "") || ""); }
+
+  // Resolve database scope (single-db filter only for now).
+  var scopeRoot = null;
   if (dbNames.length === 1) {
     var allDbs = DT.databases();
     for (var i = 0; i < allDbs.length; i++) {
-      if (allDbs[i].name() === dbNames[0]) {
-        searchOpts.in = allDbs[i].root();
+      if (safeStr(function() { return allDbs[i].name(); }) === dbNames[0]) {
+        scopeRoot = safe(function() { return allDbs[i].root(); }, null);
         break;
       }
     }
@@ -27,28 +44,37 @@ function run(argv) {
 
   var hits;
   try {
-    hits = searchOpts.in
-      ? DT.search(query, { in: searchOpts.in })
+    hits = scopeRoot
+      ? DT.search(query, { in: scopeRoot })
       : DT.search(query);
   } catch (e) {
-    return JSON.stringify({error: "JXA_ERROR", message: String(e)});
+    return JSON.stringify({
+      error: "JXA_ERROR",
+      message: "DT.search failed: " + String(e)
+    });
   }
 
   var result = [];
-  var count = Math.min(hits.length, maxResults);
-  for (var j = 0; j < count; j++) {
+  var hitCount = safe(function() { return hits.length; }, 0);
+  var iterCap = Math.min(hitCount, maxResults * 4);  // over-fetch for kind filter
+
+  for (var j = 0; j < iterCap && result.length < maxResults; j++) {
     var r = hits[j];
-    var kind = String(r.type());
+    if (!r) continue;
+
+    var uuid = safeStr(function() { return r.uuid(); });
+    if (!uuid) continue;  // unserializable record
+
+    var kind = safeStr(function() { return r.type(); });
     if (kinds.length > 0 && kinds.indexOf(kind) === -1) continue;
-    var text = "";
-    try { text = (r.plainText() || "").substring(0, 300); } catch (e) {}
+
     result.push({
-      uuid: r.uuid(),
-      name: r.name(),
-      location: r.location(),
-      reference_url: r.referenceUrl(),
+      uuid: uuid,
+      name: safeStr(function() { return r.name(); }),
+      location: safeStr(function() { return r.location(); }),
+      reference_url: safeStr(function() { return r.referenceUrl(); }),
       score: null,
-      snippet: text
+      snippet: null  // populated lazily by callers that need it
     });
   }
   return JSON.stringify(result);
