@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 from istefox_dt_mcp_schemas.common import (
     ClassifySuggestion,
+    Database,
     MoveResult,
     Record,
     RecordKind,
@@ -38,6 +39,16 @@ def _record(
         creation_date=datetime.now(),
         modification_date=datetime.now(),
         tags=tags or [],
+    )
+
+
+def _database(name: str = "Business", *, is_open: bool = True) -> Database:
+    return Database(
+        uuid=f"db-{name}",
+        name=name,
+        path=f"/Users/x/{name}.dtBase2",
+        is_open=is_open,
+        record_count=10,
     )
 
 
@@ -98,6 +109,7 @@ async def test_destination_hint_overrides_classify(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
     mock_adapter.get_record.return_value = _record(location="/Inbox")
+    mock_adapter.list_databases.return_value = [_database("Business")]
 
     fn = _register_file_document_and_get_callable(deps)
     out = await fn(
@@ -110,6 +122,57 @@ async def test_destination_hint_overrides_classify(
     assert out.data.preview.destination_group == "/Business/Manual"
     # classify_record must NOT be called when a hint is provided
     mock_adapter.classify_record.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_destination_hint_unknown_database_returns_clear_error(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """Server-side validation catches /Triage (missing DB prefix) immediately.
+
+    Recovery_hint must list the available databases so the user can
+    fix the typo without round-tripping to JXA.
+    """
+    mock_adapter.get_record.return_value = _record(location="/Inbox")
+    mock_adapter.list_databases.return_value = [
+        _database("Inbox"),
+        _database("privato"),
+    ]
+    fn = _register_file_document_and_get_callable(deps)
+    out = await fn(
+        FileDocumentInput(
+            record_uuid="u",
+            dry_run=True,
+            destination_hint="/Triage",  # missing /Inbox prefix
+        )
+    )
+    assert out.success is False
+    assert out.error_code == "DATABASE_NOT_FOUND"
+    assert out.recovery_hint is not None
+    # Available databases listed in recovery hint
+    assert "Inbox" in out.recovery_hint
+    assert "privato" in out.recovery_hint
+    # JXA never invoked because validation failed first
+    mock_adapter.move_record.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_destination_hint_empty_path_returns_clear_error(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """An empty/root path is rejected with the same error code."""
+    mock_adapter.get_record.return_value = _record(location="/Inbox")
+    mock_adapter.list_databases.return_value = [_database("Inbox")]
+    fn = _register_file_document_and_get_callable(deps)
+    out = await fn(
+        FileDocumentInput(
+            record_uuid="u",
+            dry_run=True,
+            destination_hint="/",
+        )
+    )
+    assert out.success is False
+    assert out.error_code == "DATABASE_NOT_FOUND"
 
 
 @pytest.mark.asyncio

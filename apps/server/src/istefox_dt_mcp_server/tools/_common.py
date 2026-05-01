@@ -10,6 +10,12 @@ The `validate_confirm_token` helper enforces preview-token integrity
 for write tools (file_document, bulk_apply): the token must be a
 known audit_id, must point to a previous dry_run of the *same* tool,
 must not have expired (TTL), and must not have been consumed before.
+
+The `validate_destination_path` helper checks that the first segment
+of an absolute destination path matches an open DEVONthink database.
+This is a UX accelerator: it fails fast with a clear list of valid
+databases instead of waiting for the JXA bridge to return an opaque
+DATABASE_NOT_FOUND.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ import structlog
 from istefox_dt_mcp_adapter.errors import (
     AdapterError,
     ConsumedPreviewTokenError,
+    DatabaseNotFoundError,
     ExpiredPreviewTokenError,
     InvalidPreviewTokenError,
 )
@@ -131,6 +138,41 @@ def validate_confirm_token(
         raise ConsumedPreviewTokenError()
 
 
+async def validate_destination_path(deps: Deps, path: str) -> None:
+    """Verify the first segment of `path` matches an open database.
+
+    Raises `DatabaseNotFoundError` (subclass of AdapterError, caught by
+    `safe_call`) if the prefix is empty or doesn't match any currently
+    open DEVONthink database.
+
+    The recovery_hint is overridden to include the list of available
+    databases — much more helpful than the generic adapter message
+    when the user is debugging a `destination_hint` typo.
+    """
+    parts = path.lstrip("/").split("/", 1)
+    first = parts[0] if parts else ""
+    if not first:
+        err = DatabaseNotFoundError("(empty)")
+        err.recovery_hint = (
+            "destination_hint deve iniziare con il nome di un database "
+            "(es. '/Inbox/MyGroup'). Usa list_databases per enumerare i "
+            "database aperti."
+        )
+        raise err
+    dbs = await deps.adapter.list_databases()
+    open_names = [d.name for d in dbs if d.is_open]
+    if first not in open_names:
+        avail = ", ".join(sorted(open_names)) or "(nessun database aperto)"
+        err = DatabaseNotFoundError(first)
+        err.recovery_hint = (
+            f"Database '{first}' non trovato fra quelli aperti. "
+            f"Database disponibili: {avail}. Il primo segmento di "
+            f"destination_hint deve essere il nome esatto di un database "
+            f"(case-sensitive). Esempio: '/{open_names[0] if open_names else 'Inbox'}/MyGroup'."
+        )
+        raise err
+
+
 async def safe_call[T, OutT: Envelope[Any]](
     *,
     tool_name: str,
@@ -178,13 +220,18 @@ async def safe_call[T, OutT: Envelope[Any]](
                     error_code=e.code.value,
                     duration_ms=round(t.duration_ms, 1),
                 )
+                # Per-instance recovery_hint (richer, includes call
+                # context like "available databases: X, Y") wins over
+                # the static translator default. Falls back to the
+                # translator when the exception didn't carry one.
+                recovery = e.recovery_hint or deps.translator.recovery_hint_it(e.code)
                 return output_factory(
                     success=False,
                     data=None,
                     audit_id=audit_id,
                     error_code=e.code.value,
                     error_message=deps.translator.message_it(e.code),
-                    recovery_hint=deps.translator.recovery_hint_it(e.code),
+                    recovery_hint=recovery,
                 )
 
         audit_id = deps.audit.append(
