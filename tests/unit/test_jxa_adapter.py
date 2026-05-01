@@ -176,3 +176,61 @@ async def test_find_related_drops_seed_record() -> None:
     assert len(results) == 1
     assert results[0].uuid == "OTHER-1"
     assert all(r.uuid != seed_uuid for r in results)
+
+
+@pytest.mark.asyncio
+async def test_list_databases_default_includes_record_count(monkeypatch) -> None:
+    """Default behavior: no argv passed to list_databases.js -> count
+    is computed (record_count populated by the script)."""
+    monkeypatch.delenv("ISTEFOX_FAST_LIST_DATABASES", raising=False)
+    captured: dict[str, tuple] = {}
+
+    async def fake_run_script(self, name: str, *argv: str):
+        captured["argv"] = argv
+        return [
+            {
+                "uuid": "db1",
+                "name": "Inbox",
+                "path": "/x/Inbox.dtBase2",
+                "is_open": True,
+                "record_count": 42,
+            }
+        ]
+
+    adapter = JXAAdapter(pool_size=1, timeout_s=2.0, max_retries=1, cache=None)
+    with patch(
+        "istefox_dt_mcp_adapter.jxa.JXAAdapter._run_script", new=fake_run_script
+    ):
+        dbs = await adapter.list_databases()
+
+    assert captured["argv"] == ()  # no argv -> include count
+    assert dbs[0].record_count == 42
+
+
+@pytest.mark.asyncio
+async def test_list_databases_fast_mode_skips_count(monkeypatch) -> None:
+    """ISTEFOX_FAST_LIST_DATABASES=1 -> argv ('0',) -> script returns
+    null record_count, adapter passes it through."""
+    monkeypatch.setenv("ISTEFOX_FAST_LIST_DATABASES", "1")
+    captured: dict[str, tuple] = {}
+
+    async def fake_run_script(self, name: str, *argv: str):
+        captured["argv"] = argv
+        return [
+            {
+                "uuid": "db1",
+                "name": "Inbox",
+                "path": "/x/Inbox.dtBase2",
+                "is_open": True,
+                "record_count": None,
+            }
+        ]
+
+    adapter = JXAAdapter(pool_size=1, timeout_s=2.0, max_retries=1, cache=None)
+    with patch(
+        "istefox_dt_mcp_adapter.jxa.JXAAdapter._run_script", new=fake_run_script
+    ):
+        dbs = await adapter.list_databases()
+
+    assert captured["argv"] == ("0",)
+    assert dbs[0].record_count is None

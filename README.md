@@ -140,6 +140,15 @@ uv run istefox-dt-mcp doctor       # health check (richiede DT in esecuzione)
 uv run istefox-dt-mcp serve        # avvia server stdio (per Claude Desktop)
 ```
 
+## Performance tuning (env vars)
+
+| Variabile | Default | Effetto |
+|---|---|---|
+| `ISTEFOX_FAST_LIST_DATABASES` | unset | Se `=1`: `list_databases` salta il computo di `record_count` (ritorna `null`). Utile su database con decine di migliaia di record dove `d.contents().length` può richiedere secondi alla prima invocazione (la cache 5min ammortizza le successive). Default: count incluso, comportamento invariato. |
+| `ISTEFOX_PREVIEW_TTL_S` | `300` | Override TTL in secondi del `preview_token` (default 5 minuti). Range valido: ≥ 1. |
+| `ISTEFOX_RAG_ENABLED` | `0` | Se `=1`: abilita il provider vector RAG (vedi sezione successiva). |
+| `ISTEFOX_RAG_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Override modello embedding (es. `BAAI/bge-m3`). Solo se RAG abilitato. |
+
 ## RAG (vector search) — opt-in **experimental**
 
 > **⚠️ Experimental in 0.1.0**: il codice RAG è completo e testato a
