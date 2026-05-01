@@ -1091,6 +1091,9 @@ requires-dist = [
 name = "istefox-dt-mcp-workspace"
 version = "0.0.1"
 source = { virtual = "." }
+dependencies = [
+    { name = "istefox-dt-mcp-server" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1105,6 +1108,7 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "istefox-dt-mcp-server", editable = "apps/server" }]
 
 [package.metadata.requires-dev]
 dev = [
