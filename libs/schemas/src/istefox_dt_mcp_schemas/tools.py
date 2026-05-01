@@ -125,7 +125,7 @@ class FindRelatedOutput(Envelope[list[RelatedResult]]):
 
 
 # ----------------------------------------------------------------------
-# ask_database (post-W4 — placeholder schema)
+# ask_database
 # ----------------------------------------------------------------------
 
 
@@ -139,8 +139,12 @@ class Citation(StrictModel):
 class AskDatabaseInput(StrictModel):
     """Ask a natural-language question, get an answer with citations.
 
-    Uses retrieval-augmented generation (RAG) over the user's DEVONthink
-    databases. In v1 BM25-only retrieval; vector retrieval added in W6.
+    Retrieval over the user's DEVONthink databases. By default uses
+    BM25-only (zero setup, no embedding model download). Vector
+    retrieval is opt-in experimental in 0.1.0 (set
+    `ISTEFOX_RAG_ENABLED=1` and run `istefox-dt-mcp reindex <db>` to
+    populate the local vector index). See ADR-008 for the embedding
+    model selection roadmap.
 
     When to use:
     - The user asks an open question whose answer is in their archive.
