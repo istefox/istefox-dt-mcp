@@ -217,10 +217,7 @@ class AuditLog:
         applies. Apply-vs-preview can be inferred from
         `input_json.dry_run`.
         """
-        sql = (
-            "SELECT audit_id, ts, tool_name, input_json, error_code "
-            "FROM audit_log"
-        )
+        sql = "SELECT audit_id, ts, tool_name, input_json, error_code " "FROM audit_log"
         params: tuple[Any, ...] = ()
         if tool_name:
             sql += " WHERE tool_name = ?"

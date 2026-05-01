@@ -171,21 +171,24 @@ async def test_replay_apply_tag() -> None:
     # cassette: tags_before is everything in tags_after minus the new tag.
     tags_after_payload = json.loads(cassette["stdout"])["tags_after"]
     tags_before = [t for t in tags_after_payload if t != tag]
-    record_stdout = json.dumps(
-        {
-            "uuid": uuid,
-            "name": "Fattura 2026-001 ACME Srl",
-            "kind": "PDF",
-            "location": "/privato/fatture/2026/",
-            "path": None,
-            "reference_url": f"x-devonthink-item://{uuid}",
-            "creation_date": "2026-01-15T09:32:11.000Z",
-            "modification_date": "2026-01-15T09:33:02.000Z",
-            "tags": tags_before,
-            "size_bytes": None,
-            "word_count": None,
-        }
-    ).encode("utf-8") + b"\n"
+    record_stdout = (
+        json.dumps(
+            {
+                "uuid": uuid,
+                "name": "Fattura 2026-001 ACME Srl",
+                "kind": "PDF",
+                "location": "/privato/fatture/2026/",
+                "path": None,
+                "reference_url": f"x-devonthink-item://{uuid}",
+                "creation_date": "2026-01-15T09:32:11.000Z",
+                "modification_date": "2026-01-15T09:33:02.000Z",
+                "tags": tags_before,
+                "size_bytes": None,
+                "word_count": None,
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     procs = [
         _mock_proc(stdout=record_stdout),
@@ -217,21 +220,24 @@ async def test_replay_move_record() -> None:
     location_before = "/privato/inbox/"
     location_after = json.loads(cassette["stdout"])["location"]
 
-    record_stdout = json.dumps(
-        {
-            "uuid": uuid,
-            "name": "Documento da archiviare",
-            "kind": "PDF",
-            "location": location_before,
-            "path": None,
-            "reference_url": f"x-devonthink-item://{uuid}",
-            "creation_date": "2026-01-10T08:00:00.000Z",
-            "modification_date": "2026-01-10T08:00:00.000Z",
-            "tags": [],
-            "size_bytes": None,
-            "word_count": None,
-        }
-    ).encode("utf-8") + b"\n"
+    record_stdout = (
+        json.dumps(
+            {
+                "uuid": uuid,
+                "name": "Documento da archiviare",
+                "kind": "PDF",
+                "location": location_before,
+                "path": None,
+                "reference_url": f"x-devonthink-item://{uuid}",
+                "creation_date": "2026-01-10T08:00:00.000Z",
+                "modification_date": "2026-01-10T08:00:00.000Z",
+                "tags": [],
+                "size_bytes": None,
+                "word_count": None,
+            }
+        ).encode("utf-8")
+        + b"\n"
+    )
 
     procs = [
         _mock_proc(stdout=record_stdout),

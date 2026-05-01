@@ -47,6 +47,7 @@ def test_get_record_latency_p95_under_500ms(
     is the JXA round-trip (hundreds of ms), not the event-loop setup
     cost (microseconds).
     """
+
     # One-shot search to obtain a real UUID. Done outside the timed
     # body so search latency doesn't pollute the get_record numbers.
     async def _seed() -> str:
