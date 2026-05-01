@@ -14,6 +14,51 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.15] — 2026-05-01 — Fix: manifest .mcpb compatibile con Claude Desktop installato
+
+Bundle .mcpb v0.0.12 era rifiutato/non installabile da Claude
+Desktop. Tre fix iterativi consolidati in questa release dopo aver
+ispezionato i manifest delle extension già installate in
+`~/Library/Application Support/Claude/Claude Extensions/*/manifest.json`
+e aver fatto E2E test concreto in Claude Desktop.
+
+### Fixed
+- **(v0.0.13) Schema manifest 0.3, non 0.4**: Claude Desktop
+  installato segue la spec **0.3** (non la 0.4 della doc online).
+  Errore visibile: `Failed to preview extension: Invalid manifest:
+  server: Required`. Tutti i manifest installati usano
+  `manifest_version: "0.3"` + `server.mcp_config` esplicito anche
+  per type uv. Aggiornato:
+  - `manifest_version`: `"0.4"` → `"0.3"`
+  - `server.type`: `"uv"` → `"python"`
+  - `server.mcp_config` aggiunto con `command` + `args`
+- **(v0.0.14) Path assoluto a uv**: macOS GUI app (Claude Desktop)
+  non ereditano il PATH dello shell — vedono solo
+  `/usr/bin:/bin:/usr/sbin:/sbin`. `uv` installato via Homebrew
+  Apple Silicon è in `/opt/homebrew/bin/uv` → invisibile a Claude.
+  `command: "uv"` → `command: "/opt/homebrew/bin/uv"`.
+- **(v0.0.15) Rimosso `compatibility.runtimes.python`**: era un
+  bloccante dell'install (bottone "Installa" disabilitato con
+  tooltip "Questa estensione richiede Python >=3.12,<4.0"). Claude
+  Desktop non riusciva a verificare il Python di sistema. Tanto
+  `uv` può scaricare Python in autonomia se serve — togliere il
+  vincolo dichiarativo non fa perdere safety.
+
+### Verified
+- 132 test unit pass invariati (`uv run pytest tests/unit -q`)
+- mypy strict + ruff + black puliti
+- **E2E install in Claude Desktop**: tutti e 6 i tool MCP visibili
+  e abilitati nella sezione Connettori → Desktop
+- Server bumped a v0.0.15
+
+### Limitations note
+- Path assoluto a `/opt/homebrew/bin/uv` funziona solo per macOS
+  Apple Silicon con Homebrew. Intel Mac (`/usr/local/bin/uv`) o
+  altre installazioni (cargo, pipx, ecc.) richiedono override
+  manuale del manifest (issue post-MVP: detection runtime di uv).
+
+---
+
 ## [0.0.12] — 2026-05-01 — Fix: bundle .mcpb installa il server package
 
 ### Fixed
