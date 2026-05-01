@@ -14,6 +14,49 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.16] — 2026-05-01 — Fix: bug raccolti dall'E2E v0.0.15
+
+Tre bug raccolti durante il test E2E in Claude Desktop. Tutti
+non bloccanti, ma noti dal test reale: vale la pena chiuderli
+prima di proseguire con altre feature.
+
+### Fixed
+- **`record_count: null` in `list_databases`** — era hardcoded a
+  null in `list_databases.js`. Ora popola con
+  `d.contents().length` (count ricorsivo dei record nel DB),
+  wrapped in `safe()` con default null se la chiamata fallisce o è
+  troppo lenta.
+- **`score: null` in `search`** — era hardcoded null. Ora prova
+  `r.score()` (relevance 0..1 esposta da DT4 sui risultati di
+  search), fallback null se non disponibile. `snippet` resta null
+  per design — `r.plainText()` è I/O bloccante per PDF grandi e
+  l'utente può usare il tool dedicato `get_record_text` on demand.
+- **`similarity: null` in `find_related`** — stesso pattern: prova
+  `r.score()` su risultati `compare()`, fallback null.
+- **`find_related` includeva il record seed nei risultati** — la
+  DT API `compare()` restituisce anche il record di partenza. Fix
+  doppio (defense in depth):
+  1. JXA `find_related.js` skippa `if (ru === uuid) continue;`
+  2. Python `JXAAdapter.find_related` filtra di nuovo
+     `r.get("uuid") != uuid` prima della validation Pydantic
+- Test unit nuovo: `test_find_related_drops_seed_record` —
+  mocka un raw output con il seme nei risultati e verifica che
+  l'adapter lo rimuova.
+
+### Verified
+- 133 test unit pass (era 132, +1 nuovo per il filtro seed)
+- mypy strict + ruff + black puliti
+- Server bumped a v0.0.16
+
+### Note metodologiche
+Tutti questi bug erano emersi solo durante l'E2E reale in Claude
+Desktop con DEVONthink — non sarebbero stati catturati dalla
+test suite unit perché riguardavano valori di default JXA e
+quirk dell'API DT (compare incluso seed). Conferma del valore
+del Tier 4 testing nella ADR-005.
+
+---
+
 ## [0.0.15] — 2026-05-01 — Fix: manifest .mcpb compatibile con Claude Desktop installato
 
 Bundle .mcpb v0.0.12 era rifiutato/non installabile da Claude

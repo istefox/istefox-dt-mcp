@@ -73,8 +73,13 @@ function run(argv) {
       name: safeStr(function() { return r.name(); }),
       location: safeStr(function() { return r.location(); }),
       reference_url: safeStr(function() { return r.referenceUrl(); }),
-      score: null,
-      snippet: null  // populated lazily by callers that need it
+      // DT4 may expose .score() on search results (relevance 0..1).
+      // Falls back to null if the property isn't accessible.
+      score: safe(function() { return r.score(); }, null),
+      // Snippet stays null by design: r.plainText() is slow on big
+      // PDFs, and tool callers can pull text on demand via
+      // get_record_text. Avoid blocking search on per-result I/O.
+      snippet: null
     });
   }
   return JSON.stringify(result);
