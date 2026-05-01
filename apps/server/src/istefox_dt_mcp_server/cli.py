@@ -155,6 +155,80 @@ def undo(audit_id: str, apply_changes: bool, force: bool) -> None:
         sys.exit(2)
 
 
+@cli.group()
+def audit() -> None:
+    """Inspect the audit log (recent entries, by audit_id)."""
+
+
+@audit.command("list")
+@click.option(
+    "--recent",
+    "limit",
+    type=int,
+    default=10,
+    show_default=True,
+    help="How many recent entries to show.",
+)
+@click.option(
+    "--tool",
+    "tool_name",
+    type=str,
+    default=None,
+    help="Filter by tool name (e.g. file_document, bulk_apply).",
+)
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Emit a JSON array instead of the human table.",
+)
+def audit_list(limit: int, tool_name: str | None, output_json: bool) -> None:
+    """List the most recent audit entries.
+
+    Use this to find the audit_id you need to pass to `undo`. The
+    apply call returns its audit_id in the tool response, but Claude
+    Desktop doesn't always render that field visibly — this command
+    gives you the canonical recovery path.
+
+    Apply-vs-preview can be inferred from the input column
+    (`dry_run=true` is a preview, `dry_run=false` is an apply).
+    Only applies are undoable.
+    """
+    deps = build_default_deps()
+    rows = deps.audit.list_recent(limit=limit, tool_name=tool_name)
+
+    if output_json:
+        click.echo(json.dumps(rows, indent=2, default=str))
+        return
+
+    if not rows:
+        click.echo("(no audit entries)")
+        return
+
+    # Human-readable table. Compact: audit_id (full, for copy-paste),
+    # local time, tool, applied/preview, brief input hint.
+    for r in rows:
+        inp = r["input"]
+        is_apply = inp.get("dry_run") is False
+        kind = "APPLY" if is_apply else "preview"
+        # Pick a useful input hint per tool.
+        hint = (
+            inp.get("record_uuid")
+            or inp.get("query")
+            or inp.get("question")
+            or inp.get("uuid")
+            or ""
+        )
+        if isinstance(hint, str) and len(hint) > 40:
+            hint = hint[:37] + "..."
+        err = f" ERR={r['error_code']}" if r["error_code"] else ""
+        click.echo(
+            f"{r['audit_id']}  {r['ts']}  {r['tool_name']:14s} "
+            f"{kind:7s} {hint}{err}"
+        )
+
+
 @cli.command()
 @click.option(
     "--port",
