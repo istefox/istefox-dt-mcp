@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -152,11 +153,20 @@ class JXAAdapter(DEVONthinkAdapter):
         )
 
     async def list_databases(self) -> list[Database]:
-        cache_key = "list_databases"
+        # ISTEFOX_FAST_LIST_DATABASES=1 skips the recursive
+        # d.contents().length count, returning record_count=null. Useful
+        # on databases with tens of thousands of records where the first
+        # call is slow (the 5min cache amortizes subsequent calls but
+        # not the first one). Default behavior unchanged.
+        skip_count = os.environ.get("ISTEFOX_FAST_LIST_DATABASES") == "1"
+        cache_key = (
+            "list_databases:fast" if skip_count else "list_databases"
+        )
         if self._cache and (cached := self._cache.get(cache_key)):
             return [Database.model_validate(d) for d in cached]
 
-        raw = await self._run_script("list_databases.js")
+        argv = ("0",) if skip_count else ()
+        raw = await self._run_script("list_databases.js", *argv)
         databases = [Database.model_validate(d) for d in raw]
 
         if self._cache:
