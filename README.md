@@ -140,7 +140,14 @@ uv run istefox-dt-mcp doctor       # health check (richiede DT in esecuzione)
 uv run istefox-dt-mcp serve        # avvia server stdio (per Claude Desktop)
 ```
 
-## RAG (vector search) — opt-in
+## RAG (vector search) — opt-in **experimental**
+
+> **⚠️ Experimental in 0.1.0**: il codice RAG è completo e testato a
+> livello unit, ma il default del modello embedding non è ancora
+> validato cross-corpus. Vedi [ADR-008](docs/adr/0008-embedding-model-selection.md)
+> per i criteri di promozione a default in 0.2.0. Se attivi RAG ora,
+> sappi che la qualità dipende fortemente dal tuo corpus — feedback
+> via GitHub issue molto graditi.
 
 Il server gira in modalità BM25-only di default (zero overhead, no
 modelli da scaricare). Per attivare la ricerca vettoriale:
