@@ -56,11 +56,48 @@ def doctor() -> None:
 
     async def run() -> dict[str, Any]:
         health = await deps.adapter.health_check()
-        return health.model_dump()
+        rag_stats = await deps.rag.stats()
+        out = health.model_dump()
+        out["rag"] = rag_stats.model_dump()
+        return out
 
     result = asyncio.run(run())
     click.echo(json.dumps(result, indent=2, default=str))
     sys.exit(0 if result.get("dt_running") else 1)
+
+
+@cli.command()
+@click.argument("database")
+@click.option(
+    "--limit",
+    type=int,
+    default=None,
+    help="Cap the number of records (None = all). Useful for incremental tests.",
+)
+@click.option(
+    "--batch-size",
+    type=int,
+    default=64,
+    show_default=True,
+    help="How many records per embedding batch.",
+)
+def reindex(database: str, limit: int | None, batch_size: int) -> None:
+    """Index a DEVONthink database into the RAG provider (manual one-shot).
+
+    Requires ISTEFOX_RAG_ENABLED=1. Smart-rule-driven incremental sync
+    will land in W6.
+    """
+    from .reindex import reindex_database
+
+    deps = build_default_deps()
+
+    async def run() -> dict[str, int]:
+        return await reindex_database(
+            deps, database, limit=limit, batch_size=batch_size
+        )
+
+    counters = asyncio.run(run())
+    click.echo(json.dumps(counters, indent=2))
 
 
 def main() -> None:

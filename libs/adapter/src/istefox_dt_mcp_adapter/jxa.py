@@ -175,6 +175,30 @@ class JXAAdapter(DEVONthinkAdapter):
             raise RecordNotFoundError(uuid)
         return Record.model_validate(raw)
 
+    async def enumerate_records(
+        self,
+        database_name: str,
+        *,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, str]], int]:
+        raw = await self._run_script(
+            "enumerate_db.js",
+            database_name,
+            str(limit),
+            str(offset),
+        )
+        if (
+            isinstance(raw, dict)
+            and raw.get("error") == ErrorCode.DATABASE_NOT_FOUND.value
+        ):
+            raise DatabaseNotFoundError(database_name)
+        if not isinstance(raw, dict):
+            return [], 0
+        records = raw.get("records") or []
+        total = int(raw.get("total_seen", 0))
+        return list(records), total
+
     async def get_record_text(self, uuid: str, *, max_chars: int = 2000) -> str:
         cache_key = f"record_text:{uuid}:max={max_chars}"
         if self._cache and (cached := self._cache.get(cache_key)):

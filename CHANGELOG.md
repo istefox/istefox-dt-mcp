@@ -6,11 +6,64 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W5-6) RAG same-process implementation `ChromaRAGProvider` (ChromaDB + bge-m3) — `ADR-003`
+- (W6) Smart-rule-driven incremental sync DT4 → ChromaRAGProvider
+- (W6) Local webhook receiver per smart-rule events
+- (W6) Reconciliation notturna hash-based
 - (W7) `file_document` con `dry_run` mandatory + audit before_state + `confirm_token` flow
 - (W7+) `bulk_apply`, `undo` (schema già pronti)
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
+
+---
+
+## [0.0.5] — 2026-05-01 — W5: ChromaRAGProvider + hybrid search + reindex
+
+### Added
+- **`ChromaRAGProvider`** (apps/sidecar) — implementazione concreta
+  di `RAGProvider` su ChromaDB embedded (same-process, ADR-003).
+  Lazy load del modello + del client (zero overhead startup quando
+  RAG disabilitato). Asyncio.Lock su write per ChromaDB thread-safety.
+- **Config-driven RAG selection** in `Deps`:
+  - `ISTEFOX_RAG_ENABLED=1` attiva ChromaRAGProvider
+  - `ISTEFOX_RAG_MODEL=...` override modello (default
+    `paraphrase-multilingual-MiniLM-L12-v2`)
+  - default = NoopRAGProvider (no overhead, BM25-only)
+- **`reindex` CLI command**: `istefox-dt-mcp reindex <database>
+  [--limit N] [--batch-size N]` — walk DT con `enumerate_records`
+  (nuovo metodo adapter + script JXA `enumerate_db.js`), estrae
+  text via `get_record_text`, batch-indexes nel vector store.
+- **`enumerate_records(database, limit, offset)`** nel
+  `DEVONthinkAdapter` ABC + `JXAAdapter` impl + script JXA defensive
+  (DFS iterativo, salta groups/smart groups).
+- **Hybrid search RRF** in tool `search`:
+  - mode `bm25` (default): solo DT native (come prima)
+  - mode `semantic`: solo vector (fallback bm25 se RAG noop)
+  - mode `hybrid`: parallel BM25 + vector, fusione via Reciprocal
+    Rank Fusion (k=60). Hydration metadata via `get_record` per
+    UUID solo-vector.
+- **`ask_database` upgraded a vector-first**: usa RAG provider
+  per retrieval semantico quando disponibile, fallback BM25 altrimenti.
+  Snippet preferito da ChromaDB; metadata da `get_record`.
+- **`doctor` espanso** con stato RAG (`indexed_count`, `last_index_at`,
+  `embedding_model`).
+
+### Changed
+- `Deps` ora ha campo `rag: RAGProvider` obbligatorio (era ABC)
+- `apps/server` dipende da `apps/sidecar` (workspace member)
+- `ask_database` snippet: prima preferiva DT plain text, ora
+  preferisce snippet già fornito da ChromaDB (più veloce, no extra
+  JXA call)
+
+### Verified
+- 84 test unit pass (68 W4 + 16 nuovi: RRF fusion, search modes,
+  reindex, ask_database vector mode)
+- mypy strict + ruff + black puliti
+- ADR-003 spike PASS (50K record, p95 5.5ms, 0 errori)
+
+### Pending W6
+- Smart rule DT4 → webhook locale per sync incrementale
+- Reconciliation notturna hash-based (full re-scan)
+- Selezione modello finale (ADR-008): MiniLM vs bge-m3 benchmark
 
 ---
 

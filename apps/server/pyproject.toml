@@ -19,6 +19,7 @@ dependencies = [
     # Workspace siblings
     "istefox-dt-mcp-adapter",
     "istefox-dt-mcp-schemas",
+    "istefox-dt-mcp-sidecar",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ build-backend = "hatchling.build"
 [tool.uv.sources]
 istefox-dt-mcp-adapter = { workspace = true }
 istefox-dt-mcp-schemas = { workspace = true }
+istefox-dt-mcp-sidecar = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/istefox_dt_mcp_server"]
