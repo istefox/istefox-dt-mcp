@@ -176,23 +176,34 @@ if [[ ! -f "${AUDIT_DB}" ]]; then
     exit 1
 fi
 
-# Count rows created today across any audit table.
-TODAY_ROWS="$(sqlite3 "${AUDIT_DB}" \
-    "SELECT COUNT(*) FROM audit WHERE DATE(timestamp) = DATE('now', 'localtime');" \
+# Schema sanity: verify audit_log table exists and is queryable.
+# We do NOT require a row from "today" because:
+#   - audit list (which we ran above) is a READ op, doesn't append
+#   - doctor doesn't go through the audit-tracked tool framework
+#   - a fresh install has zero rows on day 1, which is correct state
+# What we WANT to validate: the schema is intact and the DB is
+# writable (the latter is implicitly proven by the fact that build_default_deps
+# could open it without error during `audit list`).
+SCHEMA_CHECK="$(sqlite3 "${AUDIT_DB}" \
+    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='audit_log';" \
     2>/dev/null || echo "0")"
 
-if ! [[ "${TODAY_ROWS}" =~ ^[0-9]+$ ]]; then
-    TODAY_ROWS=0
-fi
-
-if (( TODAY_ROWS < 1 )); then
-    echo "   FAIL: audit DB exists but has no rows for today" >&2
-    echo "   path: ${AUDIT_DB}" >&2
+if [[ "${SCHEMA_CHECK}" != "1" ]]; then
+    echo "   FAIL: audit_log table missing from ${AUDIT_DB}" >&2
+    echo "   recovery: rm ${AUDIT_DB} and re-run any istefox-dt-mcp command" >&2
     echo "[FAIL] smoke fail (step 3)"
     exit 1
 fi
 
-echo "   ok: audit DB present with ${TODAY_ROWS} row(s) today (${AUDIT_DB})"
+# Count total rows (not "today") for an informational marker.
+TOTAL_ROWS="$(sqlite3 "${AUDIT_DB}" \
+    "SELECT COUNT(*) FROM audit_log;" \
+    2>/dev/null || echo "0")"
+if ! [[ "${TOTAL_ROWS}" =~ ^[0-9]+$ ]]; then
+    TOTAL_ROWS=0
+fi
+
+echo "   ok: audit_log schema present, ${TOTAL_ROWS} total row(s) (${AUDIT_DB})"
 
 # ---------------------------------------------------------------------------
 # Step 4 — Bundle build artifact check (warning only, not failure).

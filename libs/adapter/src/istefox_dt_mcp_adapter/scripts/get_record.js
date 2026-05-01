@@ -37,13 +37,23 @@ function run(argv) {
     return d ? d.toISOString() : null;
   }
 
+  // referenceUrl() may return empty for special record types (smart
+  // group, feed item, missing file placeholder). Fall back to the
+  // canonical x-devonthink-item:// constructed from uuid so callers
+  // always get a usable deep link. Same pattern as search_bm25.js
+  // and find_related.js — keep them consistent or get_record vs
+  // search round-trips will mismatch (see test_get_record_round_trip).
+  var uuidStr = safeStr(function() { return record.uuid(); });
+  var refUrl = safeStr(function() { return record.referenceUrl(); });
+  if (!refUrl && uuidStr) refUrl = "x-devonthink-item://" + uuidStr;
+
   return JSON.stringify({
-    uuid: safeStr(function() { return record.uuid(); }),
+    uuid: uuidStr,
     name: safeStr(function() { return record.name(); }),
     kind: safeStr(function() { return record.type(); }),
     location: safeStr(function() { return record.location(); }),
     path: safe(function() { return record.path(); }, null),
-    reference_url: safeStr(function() { return record.referenceUrl(); }),
+    reference_url: refUrl,
     creation_date: iso(function() { return record.creationDate(); }),
     modification_date: iso(function() { return record.modificationDate(); }),
     tags: safe(function() { return record.tags(); }, []),
