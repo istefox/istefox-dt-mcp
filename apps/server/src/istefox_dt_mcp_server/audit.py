@@ -69,6 +69,27 @@ BEFORE DELETE ON preview_consumption
 BEGIN
     SELECT RAISE(ABORT, 'preview_consumption is append-only');
 END;
+
+-- After-state snapshots for write tools, persisted in a side table
+-- so audit_log itself stays purely append-only-on-create.
+-- PRIMARY KEY makes set_after_state one-shot per audit_id.
+CREATE TABLE IF NOT EXISTS audit_after_state (
+    audit_id  TEXT PRIMARY KEY,
+    ts        TEXT NOT NULL,
+    state     TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE TRIGGER IF NOT EXISTS after_state_no_update
+BEFORE UPDATE ON audit_after_state
+BEGIN
+    SELECT RAISE(ABORT, 'audit_after_state is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS after_state_no_delete
+BEFORE DELETE ON audit_after_state
+BEGIN
+    SELECT RAISE(ABORT, 'audit_after_state is append-only');
+END;
 """
 
 
@@ -129,9 +150,12 @@ class AuditLog:
     def get(self, audit_id: UUID) -> AuditEntry | None:
         with self._lock:
             row = self._conn.execute(
-                """SELECT audit_id, ts, principal, tool_name, input_json,
-                          output_hash, duration_ms, before_state, error_code
-                   FROM audit_log WHERE audit_id = ?""",
+                """SELECT a.audit_id, a.ts, a.principal, a.tool_name,
+                          a.input_json, a.output_hash, a.duration_ms,
+                          a.before_state, a.error_code, s.state
+                   FROM audit_log a
+                   LEFT JOIN audit_after_state s ON s.audit_id = a.audit_id
+                   WHERE a.audit_id = ?""",
                 (str(audit_id),),
             ).fetchone()
         if not row:
@@ -146,7 +170,26 @@ class AuditLog:
             duration_ms=row[6],
             before_state=json.loads(row[7]) if row[7] else None,
             error_code=row[8],
+            after_state=json.loads(row[9]) if row[9] else None,
         )
+
+    def set_after_state(self, audit_id: UUID, state: dict[str, Any]) -> bool:
+        """Attach an after_state snapshot to an existing audit entry.
+
+        One-shot per audit_id (PRIMARY KEY enforced). Returns True on
+        first set, False if already set. The audit_log row itself is
+        never mutated — the snapshot lives in audit_after_state.
+        """
+        ts = datetime.now(UTC).isoformat()
+        try:
+            with self._lock:
+                self._conn.execute(
+                    "INSERT INTO audit_after_state(audit_id, ts, state) VALUES(?,?,?)",
+                    (str(audit_id), ts, json.dumps(state, default=str)),
+                )
+        except sqlite3.IntegrityError:
+            return False
+        return True
 
     def is_consumed(self, audit_id: UUID) -> bool:
         """True if a preview token has already been used to apply."""
