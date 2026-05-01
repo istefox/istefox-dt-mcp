@@ -123,11 +123,43 @@ async def undo_audit(
         )
 
     if drift_detected and not force:
+        # Surface WHAT diverged so the user can decide if it's a real
+        # external edit (then probably don't undo) or a false positive
+        # (e.g. DT auto-added a tag, sorted tags differently, returned
+        # location with a trailing slash). Fast path to debugging
+        # without inspecting the SQLite audit log by hand.
+        drift_details: dict[str, object] = {}
+        if entry.after_state is not None:
+            after_loc = str(entry.after_state.get("location") or "")
+            after_t = sorted(entry.after_state.get("tags") or [])
+            cur_t = sorted(current.tags)
+            if current.location != after_loc:
+                drift_details["location"] = {
+                    "expected": after_loc,
+                    "current": current.location,
+                }
+            if cur_t != after_t:
+                drift_details["tags"] = {
+                    "expected": after_t,
+                    "current": cur_t,
+                    "added": sorted(set(cur_t) - set(after_t)),
+                    "removed": sorted(set(after_t) - set(cur_t)),
+                }
+        else:
+            if current.location != before_location:
+                drift_details["location"] = {
+                    "expected_match_destination_hint": input_data.get(
+                        "destination_hint"
+                    ),
+                    "current": current.location,
+                    "before": before_location,
+                }
         return {
             "audit_id": str(audit_id_obj),
             "target_record_uuid": target_uuid,
             "reverted": False,
             "drift_detected": True,
+            "drift_details": drift_details,
             "message": (
                 "record moved/edited since the original write; pass --force "
                 "to revert anyway (will overwrite intervening changes)"
