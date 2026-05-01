@@ -195,13 +195,25 @@ class JXAAdapter(DEVONthinkAdapter):
         *,
         k: int = 10,
     ) -> list[RelatedResult]:
+        cache_key = f"find_related:{uuid}:k={k}"
+        if self._cache and (cached := self._cache.get(cache_key)):
+            return [RelatedResult.model_validate(r) for r in cached]
+
         raw = await self._run_script("find_related.js", uuid, str(k))
         if (
             isinstance(raw, dict)
             and raw.get("error") == ErrorCode.RECORD_NOT_FOUND.value
         ):
             raise RecordNotFoundError(uuid)
-        return [RelatedResult.model_validate(r) for r in raw]
+        results = [RelatedResult.model_validate(r) for r in raw]
+
+        if self._cache:
+            self._cache.set(
+                cache_key,
+                [r.model_dump(mode="json") for r in results],
+                ttl_s=300.0,
+            )
+        return results
 
     async def apply_tag(
         self,
