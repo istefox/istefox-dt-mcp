@@ -79,6 +79,32 @@
 
 ---
 
+## W9 status (2026-05-01) — hard preview_token enforcement
+
+W9 chiuso in giornata (post-MVP hardening):
+- `confirm_token` ora **hard-enforced** su `file_document` e
+  `bulk_apply`. Apply senza/con token invalido → `INVALID_PREVIEW_TOKEN`.
+- **TTL 5min** di default (override env `ISTEFOX_PREVIEW_TTL_S`).
+  Token scaduti → `EXPIRED_PREVIEW_TOKEN`.
+- **One-shot consumption** via tabella `preview_consumption`
+  append-only (PRIMARY KEY su audit_id = atomic / no replay).
+  Token già usati → `CONSUMED_PREVIEW_TOKEN`.
+- **Cross-tool isolation**: token di un tool non usabile su un altro.
+- 3 nuovi `ErrorCode` + 3 nuove `*PreviewTokenError` adapter classes
+  (catturate via `safe_call`).
+- 127 test pass (era 121, +6 nuovi per i casi rejection).
+- mypy strict + ruff + black clean. CHANGELOG v0.0.9.
+
+**Pendenze post-MVP residue**:
+- After-state esplicito nell'audit log
+- Multi-step undo (chain audit_ids per `bulk_apply`)
+- ADR-008 model selection benchmark
+- HTTP transport + OAuth (W8+ originale, deferred a v2)
+- Test strategy Tier 2-4 (W9 originale)
+- Packaging `.mcpb` (W11)
+
+---
+
 ## W8 status (2026-05-01) — bulk_apply (post-MVP estensione)
 
 W8 chiuso in giornata. Aggiunto **6° tool MCP**:
