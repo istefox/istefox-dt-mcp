@@ -1,21 +1,146 @@
 name: Release
 
+# Triggered manually with a semver version input. Builds the .mcpb
+# bundle, creates a git tag, and publishes a GitHub Release with the
+# bundle attached and CHANGELOG excerpt as release notes.
+#
+# Pre-flight checks (do these locally before triggering):
+#   1. CHANGELOG.md has an entry for the version
+#   2. manifest.json + apps/server/.../server.py SERVER_VERSION match the input
+#   3. bash scripts/smoke_e2e.sh passes locally (Step 7 of the release plan)
+#
+# Tag conventions: bare semver "0.1.0" — workflow prepends "v" to
+# create the git tag "v0.1.0". GitHub Release title uses the same
+# "v0.1.0" convention.
+
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Semver tag (e.g. 0.1.0)"
+        description: "Semver to release (e.g. 0.1.0). Will create tag v<version>."
         required: true
+        type: string
+      prerelease:
+        description: "Mark as pre-release (rc / beta)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: write  # required to push tag + create release
+
+concurrency:
+  group: release
+  cancel-in-progress: false  # never cancel a half-done release
 
 jobs:
-  build:
-    # Placeholder — wired in W11 per ADR roadmap.
-    # Will produce: pipx wheel + .mcpb desktop extension.
+  build-and-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Stub
-        run: echo "Release pipeline stub — implementation in W11."
+        with:
+          fetch-depth: 0  # need full history for tagging
+
+      - name: Validate version input
+        run: |
+          V="${{ github.event.inputs.version }}"
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version: '$V' (expected semver like 0.1.0 or 0.1.0-rc1)"
+            exit 1
+          fi
+          echo "VERSION=$V" >> $GITHUB_ENV
+          echo "TAG=v$V" >> $GITHUB_ENV
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace (frozen)
+        run: uv sync --all-packages --frozen
+
+      - name: Verify manifest version matches input
+        run: |
+          MANIFEST_V=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          if [ "$MANIFEST_V" != "$VERSION" ]; then
+            echo "::error::manifest.json version is '$MANIFEST_V' but input is '$VERSION'."
+            echo "::error::Bump manifest.json + SERVER_VERSION first, commit, then re-run."
+            exit 1
+          fi
+
+      - name: Verify CHANGELOG entry exists
+        run: |
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::No CHANGELOG.md entry found for version $VERSION."
+            echo "::error::Expected a section like: '## [$VERSION] — YYYY-MM-DD — <title>'"
+            exit 1
+          fi
+
+      - name: Run unit + contract tests (final gate)
+        run: |
+          uv run pytest tests/unit tests/contract -q --tb=short --benchmark-disable
+
+      - name: Build .mcpb bundle
+        run: bash scripts/build_mcpb.sh
+
+      - name: Verify bundle artifact
+        run: |
+          BUNDLE="dist/istefox-dt-mcp-${VERSION}.mcpb"
+          test -f "${BUNDLE}" || { echo "::error::missing ${BUNDLE}"; exit 1; }
+          ls -la "${BUNDLE}"
+          echo "BUNDLE=${BUNDLE}" >> $GITHUB_ENV
+
+      - name: Extract release notes from CHANGELOG
+        # Pull the section between "## [<version>]" and the next "## [" header.
+        # The result becomes the GitHub Release body.
+        run: |
+          python3 <<'PY' > release_notes.md
+          import re, os
+          v = os.environ["VERSION"]
+          with open("CHANGELOG.md", encoding="utf-8") as f:
+              text = f.read()
+          # match from "## [v]" up to the next "## [" or end of file
+          m = re.search(
+              rf"^## \[{re.escape(v)}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+              text,
+              flags=re.DOTALL | re.MULTILINE,
+          )
+          if not m:
+              raise SystemExit(f"could not locate CHANGELOG section for {v}")
+          body = m.group(1).strip()
+          print(body)
+          PY
+          echo "----- release_notes.md preview -----"
+          head -30 release_notes.md
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists. Bump version and retry."
+            exit 1
+          fi
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release_notes.md \
+            $PRERELEASE_FLAG \
+            "$BUNDLE"
