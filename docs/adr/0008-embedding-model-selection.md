@@ -1,7 +1,7 @@
 # ADR 0008 — Embedding model selection (MiniLM vs bge-m3)
 
-- **Status**: Proposed (in attesa di benchmark su corpus reale)
-- **Date**: 2026-05-01
+- **Status**: **Deferred to 0.2.0** — framework di benchmark pronto, decisione del default rinviata post-feedback early adopter
+- **Date**: 2026-05-01 (created), 2026-05-01 (deferral lock-in per release 0.1.0)
 - **Decisori**: Stefano Ferri
 - **Related**: ADR-001 (stack), ADR-003 (RAG same-process)
 
@@ -86,6 +86,40 @@ Se MiniLM vince o pareggia: confermarlo come default permanente, chiudere la val
 - Re-rankers (es. ms-marco-MiniLM-L-6-v2) — feature post-MVP, valutazione separata
 - Sparse retrieval (SPLADE, BGE-sparse) — Chroma embedded non li supporta nativamente
 
+## Decisione per release 0.1.0 (Deferred)
+
+Per la **0.1.0** (release pubblica iniziale) il benchmark è **rinviato a 0.2.0**. Razionale:
+
+1. **Single-corpus bias**: un benchmark su un solo DB DEVONthink (quello dello sviluppatore) non è rappresentativo della varietà di workload utente. Decidere il default in base a un corpus solo rischia di scegliere male.
+2. **GOLD_QUERIES manuali**: 10-20 coppie `(query, expected_uuid)` rappresentative richiedono ore di curation focused. Bloccare la 0.1.0 su questo lavoro è inefficiente quando il valore principale (i 6 tool MCP + audit + undo) è già pronto.
+3. **Pattern feature flag**: il codice è già pronto per opt-in (`ISTEFOX_RAG_ENABLED=1` env var). Spedire **RAG opt-in experimental** in 0.1.0 e usare il feedback degli early adopter per costruire un dataset di valutazione cross-corpus per 0.2.0 è la strada più solida.
+
+### Cosa entra in 0.1.0
+
+- ✅ Tutto il codice RAG di W5-W6 (provider, hybrid RRF, ask_database vector path, reindex/reconcile/watch CLI, smart-rule template)
+- ✅ MiniLM-L12-v2 come default (zero download, ~120MB, già nel bundle)
+- ✅ Documentazione "RAG opt-in experimental" in README + tool description di `ask_database`
+- ❌ Nessun benchmark eseguito, nessun verdict di default
+
+### Cosa entra in 0.2.0 (criteri di sblocco)
+
+- Benchmark eseguito su almeno **3 corpus distinti** (lo sviluppatore + 2 early adopter raccolti via GitHub issue)
+- GOLD_QUERIES per ciascun corpus (10-20 query)
+- Verdict scritto in questa ADR (status: Accepted)
+- Se MiniLM vince o pareggia → resta default. Se bge-m3 vince con i criteri sotto → flip default
+- ADR uscita da "Deferred", marcata "Accepted"
+
+### Criteri di sblocco bge-m3 default (invariati)
+
+- **Recall@5 ≥ +15% assoluto** (es. da 0.65 a 0.80, mediato sui 3 corpus)
+- **MRR ≥ +0.10**
+- **Latency p95 < 500ms** end-to-end
+- **Memoria peak < 4GB** durante reindex 500 doc
+
 ## Status corrente
 
-Framework di benchmark pronto in `scripts/benchmark_embeddings.py`. Il run effettivo richiede DEVONthink in esecuzione e una scelta del corpus + query gold da parte di Stefano. Risultato + decisione finale aggiorneranno questa ADR.
+Framework di benchmark pronto in `scripts/benchmark_embeddings.py`. Il run effettivo è bloccato in attesa di:
+1. Curation GOLD_QUERIES (sviluppatore: post-0.1.0)
+2. Raccolta corpus + query da almeno 2 early adopter (issue GitHub: post-0.1.0)
+
+Risultato + decisione finale aggiorneranno questa ADR per la 0.2.0.
