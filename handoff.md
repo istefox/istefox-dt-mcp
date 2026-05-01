@@ -79,28 +79,61 @@
 
 ---
 
+## ⚠️ Issue noto: macOS Automation permission denied
+
+**Stato (2026-05-01)**: lo smoke E2E reale è bloccato da AppleScript `-1743`
+("Not authorized to send Apple events"). DT4 4.2.2 risponde a property
+read banali (`.version()`, `.running()`) ma rifiuta qualunque Apple Event
+significativo (`.databases()`, `.search()`).
+
+Causa: né **Warp** (terminale dev) né **Claude.app** sono nella lista
+"Automation → DEVONthink" di System Settings. `tccutil reset AppleEvents
+dev.warp.Warp-Stable` non ha forzato il dialog di consenso. Claude.app
+non ha `NSAppleEventsUsageDescription` nel suo `Info.plist` (verificato),
+quindi non può richiedere il consent flow standard.
+
+**Workaround possibili (richiedono UI utente)**:
+
+1. **Aggiungi manualmente Warp/Claude alla lista TCC**: non possibile da
+   GUI senza popup. Serve modifica diretta a `~/Library/Application
+   Support/com.apple.TCC/TCC.db` (richiede Full Disk Access alla shell).
+2. **Pre-autorizza tramite Script Editor**: apri ScriptEditor.app
+   (autorizzato di default), esegui `tell application "DEVONthink" to
+   get name of databases`, accetta il dialog. Questo NON aiuta Warp
+   direttamente.
+3. **Lancia osascript via launchd** con bundle dedicato: complesso.
+4. **Soluzione cleanest** (TBD): packaging `.mcpb` con bundle proprio
+   `Info.plist` + `NSAppleEventsUsageDescription` → al primo uso da
+   Claude Desktop il consent flow funziona.
+
+**Impatto su milestone W1-W2**: tutti i 44 test unit pass (mock JXA
+funzionante), il bridge layer è verificato a livello di codice,
+`AutomationPermissionError` è stato aggiunto al taxonomy con
+`recovery_hint` esplicito. Manca solo la verifica end-to-end su DT
+reale, che è bloccata dal permesso macOS.
+
+**Config Claude Desktop**: `claude_desktop_config.json` è stato
+aggiornato (entry `istefox-dt-mcp`, backup salvato in
+`.bak`). Riavvia Claude Desktop per attivarlo. Probabile che il primo
+tool call mostri `PERMISSION_DENIED` finché non risolto il TCC.
+
+---
+
 ## Cosa fare nella prossima sessione
 
 ### Priorità ALTA — chiusura W1-W2
 
-- [ ] **Avvia DEVONthink 4** e fai smoke test reali:
+- [ ] **Risolvere TCC permission** (vedi sezione sopra). Quando fatto:
   ```bash
-  uv run istefox-dt-mcp doctor   # deve tornare {dt_running: true, dt_version: "4.x.x", ...}
+  uv run istefox-dt-mcp doctor   # deve tornare {dt_running: true, ...}
+  uv run python -c "import asyncio; from istefox_dt_mcp_adapter.jxa import JXAAdapter; \
+    print(asyncio.run(JXAAdapter().list_databases()))"
   ```
-- [ ] **Test E2E manuale** dei 3 tool tramite Claude Desktop:
-  - Aggiungi config a `claude_desktop_config.json` (vedi README §"Integrazione Claude Desktop")
-  - Riavvia Claude Desktop
-  - Prova: `list_databases`, `search` su query reale, `find_related` su un UUID noto
-- [ ] **Commit + push** di tutto (>50 file nuovi):
-  ```bash
-  git add .
-  git commit -m "feat: W1-W2 foundations + 3 read-only tools + CI + docs"
-  git push
-  ```
-- [ ] **Verifica primo run CI** su GitHub Actions: deve essere verde su `ubuntu-latest`
-- [ ] **GO/NO-GO checkpoint W2** (vedi REVIEW_ADR §6):
-  - Latenza JXA p95 < 500ms? Misura con `pytest-benchmark` su `tests/integration/`
-  - Compatibilità DT4 confermata? (smoke test sopra)
+- [ ] **GO/NO-GO checkpoint W2** (REVIEW_ADR §6):
+  - Latenza JXA p95 < 500ms? Misura con `pytest-benchmark` (da scrivere)
+  - Compatibilità DT4 confermata? (richiede TCC fix)
+- [ ] **Test E2E via Claude Desktop**: dopo restart, prova
+  `list_databases`, `search`, `find_related` da chat Claude
 
 ### Priorità MEDIA — preparazione W3-W4
 
