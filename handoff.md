@@ -79,6 +79,35 @@
 
 ---
 
+## W8 status (2026-05-01) — bulk_apply (post-MVP estensione)
+
+W8 chiuso in giornata. Aggiunto **6° tool MCP**:
+- **`bulk_apply`** (write batch, dry-run by default):
+  - Stesso pattern preview-then-apply di `file_document`.
+  - Op supportati: `add_tag`, `remove_tag`, `move`.
+  - Validation pre-adapter (op type + payload obbligatori).
+  - Failure semantics: no auto-rollback (DT non ha transactions);
+    `stop_on_first_error=true` di default, `outcomes` per-op
+    riporta `applied`/`failed`/`planned` con `error_code`.
+  - Limite 500 op/chiamata.
+- Schema esteso: `BulkOpOutcome` aggiunto, `BulkApplyResult.outcomes`.
+- Server registra ora 6 MCP tool.
+
+121 test pass (112 W7 + 9 nuovi). mypy strict + ruff + black clean.
+CHANGELOG v0.0.8 publicato.
+
+**Pendenze post-MVP** (in ordine di valore):
+- Hard `confirm_token` enforcement con TTL (security/safety hardening
+  del flow esistente; oggi `confirm_token` è advisory)
+- After-state esplicito nell'audit log (oggi inferito dal diff)
+- Multi-step undo (chain audit_ids per `bulk_apply` selective)
+- ADR-008 model selection benchmark MiniLM vs bge-m3 su corpus reale
+- HTTP transport + OAuth (W8+ originale, deferred a v2)
+- Test strategy Tier 2-4 (W9)
+- Packaging `.mcpb` (W11)
+
+---
+
 ## W6 status (2026-05-01)
 
 W6 chiuso in giornata. Aggiunto:
