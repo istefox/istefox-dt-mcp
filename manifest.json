@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "istefox-dt-mcp",
   "display_name": "DEVONthink MCP (istefox)",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "description": "MCP server for DEVONthink 4 — outcome-oriented tools, RAG-augmented, privacy-first.",
   "long_description": "Connettore MCP best-in-class per DEVONthink 4. Sei tool MCP operativi end-to-end: list_databases, search (BM25 + vector + hybrid RRF), find_related, ask_database (vector + BM25 fallback), file_document e bulk_apply (entrambi preview-then-apply con audit log e undo selettivo). RAG locale opzionale via ChromaDB embedded. Tutti i dati restano sulla macchina: nessuna telemetry, embedding generati localmente, audit log SQLite append-only.",
   "author": {
@@ -28,7 +28,45 @@
     "entry_point": "bundle_main.py",
     "mcp_config": {
       "command": "/bin/bash",
-      "args": ["${__dirname}/bundle_main.sh"]
+      "args": ["${__dirname}/bundle_main.sh"],
+      "env": {
+        "ISTEFOX_FAST_LIST_DATABASES": "${user_config.fast_list_databases}",
+        "ISTEFOX_PREVIEW_TTL_S": "${user_config.preview_ttl_s}",
+        "ISTEFOX_RAG_ENABLED": "${user_config.rag_enabled}",
+        "ISTEFOX_RAG_MODEL": "${user_config.rag_model}"
+      }
+    }
+  },
+  "user_config": {
+    "fast_list_databases": {
+      "type": "boolean",
+      "title": "Fast list_databases mode",
+      "description": "Skip recursive record_count when listing databases. Useful on DBs with tens of thousands of records where the first call would otherwise take several seconds. Returns record_count=null. The 5-min cache mitigates the slowdown for repeated calls — enable this only if the cold-cache latency is a problem.",
+      "default": false,
+      "required": false
+    },
+    "preview_ttl_s": {
+      "type": "number",
+      "title": "Preview token TTL (seconds)",
+      "description": "Lifetime in seconds for preview_token returned by file_document/bulk_apply dry_run. After this window, the apply call must be re-previewed. Default 300 (5 minutes) is enough for the user to read the preview and confirm; lower it to tighten the safety window, raise it for slow review workflows.",
+      "default": 300,
+      "min": 1,
+      "max": 3600,
+      "required": false
+    },
+    "rag_enabled": {
+      "type": "boolean",
+      "title": "Enable vector search (RAG) — experimental",
+      "description": "Activates the embedded ChromaDB vector retrieval for ask_database and search (mode=hybrid). EXPERIMENTAL in 0.1.0: works but the embedding model default is not yet benchmarked cross-corpus (see ADR-008). When enabled, run `istefox-dt-mcp reindex <database>` once per database to populate the index.",
+      "default": false,
+      "required": false
+    },
+    "rag_model": {
+      "type": "string",
+      "title": "Embedding model",
+      "description": "sentence-transformers model name used by the RAG provider. Default is paraphrase-multilingual-MiniLM-L12-v2 (~120MB, 384-dim, multilingual). Override examples: BAAI/bge-m3 (~2.2GB, higher quality), intfloat/multilingual-e5-large. Only used when 'Enable vector search' is on.",
+      "default": "paraphrase-multilingual-MiniLM-L12-v2",
+      "required": false
     }
   },
   "compatibility": {
