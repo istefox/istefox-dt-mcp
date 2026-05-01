@@ -121,13 +121,21 @@ class MoveResult(StrictModel):
 
 
 class HealthStatus(StrictModel):
-    """Bridge health check output."""
+    """Bridge health check output.
+
+    `bridge_ready` requires BOTH process running AND data-access
+    permission (AppleEvents). `dt_running` alone (process exists)
+    is not sufficient — a denied AppleEvents grant lets the process
+    be detected but blocks every meaningful call.
+    """
 
     dt_running: bool
     dt_version: str | None = None
     bridge_ready: bool
     cache_ready: bool
     sidecar_ready: bool
+    permission_denied: bool = False
+    recovery_hint: str | None = None
 
 
 class ClassifySuggestion(StrictModel):
