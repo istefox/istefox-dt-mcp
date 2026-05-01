@@ -151,3 +151,28 @@ async def test_retry_on_transient_then_success() -> None:
     with patch("asyncio.create_subprocess_exec", new=factory3):
         result = await adapter._run_script("list_databases.js")
     assert result == 42
+
+
+@pytest.mark.asyncio
+async def test_find_related_drops_seed_record() -> None:
+    """Defense in depth: even if the JXA layer leaks the seed record
+    into the results, the Python adapter must filter it out."""
+    seed_uuid = "AAAA-BBBB-CCCC"
+    raw = (
+        b"["
+        b'{"uuid":"AAAA-BBBB-CCCC","name":"seed","similarity":null,'
+        b'"location":"/","reference_url":"x-d://AAAA-BBBB-CCCC"},'
+        b'{"uuid":"OTHER-1","name":"other-1","similarity":null,'
+        b'"location":"/","reference_url":"x-d://OTHER-1"}'
+        b"]\n"
+    )
+    adapter = JXAAdapter(pool_size=1, timeout_s=2.0, max_retries=1, cache=None)
+    with patch(
+        "asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=_mock_proc(stdout=raw)),
+    ):
+        results = await adapter.find_related(seed_uuid, k=10)
+
+    assert len(results) == 1
+    assert results[0].uuid == "OTHER-1"
+    assert all(r.uuid != seed_uuid for r in results)

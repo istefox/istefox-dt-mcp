@@ -247,7 +247,13 @@ class JXAAdapter(DEVONthinkAdapter):
             and raw.get("error") == ErrorCode.RECORD_NOT_FOUND.value
         ):
             raise RecordNotFoundError(uuid)
-        results = [RelatedResult.model_validate(r) for r in raw]
+        # Defense in depth: the JXA script already filters the seed
+        # record out of DT.compare() results, but if a future DT
+        # version returns it anyway, drop it here too — the user
+        # never wants the seed echoed back as "related to itself".
+        results = [
+            RelatedResult.model_validate(r) for r in raw if r.get("uuid") != uuid
+        ]
 
         if self._cache:
             self._cache.set(
