@@ -200,6 +200,46 @@ class AuditLog:
             ).fetchone()
         return row is not None
 
+    def list_recent(
+        self,
+        *,
+        limit: int = 10,
+        tool_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the most recent audit entries (id, ts, tool, input, error).
+
+        Lightweight projection — does NOT load `before_state`,
+        `after_state`, or recompute `output_hash`. Designed for the
+        `audit list` CLI where the user needs to find a recent
+        audit_id to feed into `undo`. Sorted newest-first.
+
+        Filter by `tool_name` if you want only e.g. file_document
+        applies. Apply-vs-preview can be inferred from
+        `input_json.dry_run`.
+        """
+        sql = (
+            "SELECT audit_id, ts, tool_name, input_json, error_code "
+            "FROM audit_log"
+        )
+        params: tuple[Any, ...] = ()
+        if tool_name:
+            sql += " WHERE tool_name = ?"
+            params = (tool_name,)
+        sql += " ORDER BY ts DESC LIMIT ?"
+        params = (*params, limit)
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
+        return [
+            {
+                "audit_id": row[0],
+                "ts": row[1],
+                "tool_name": row[2],
+                "input": json.loads(row[3]),
+                "error_code": row[4],
+            }
+            for row in rows
+        ]
+
     def mark_consumed(self, audit_id: UUID) -> bool:
         """Record one-shot consumption of a preview token.
 

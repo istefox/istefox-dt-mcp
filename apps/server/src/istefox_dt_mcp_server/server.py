@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .deps import Deps
 
 SERVER_NAME = "istefox-dt-mcp"
-SERVER_VERSION = "0.0.22"
+SERVER_VERSION = "0.0.23"
 
 
 SERVER_INSTRUCTIONS = """\

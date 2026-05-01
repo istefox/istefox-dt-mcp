@@ -12,6 +12,36 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.23] — 2026-05-01 — CLI `audit list` per recuperare audit_id
+
+### Added
+- **`istefox-dt-mcp audit list --recent N`**: nuovo comando CLI
+  che lista gli ultimi N audit con `audit_id`, timestamp, tool,
+  preview/APPLY, hint sull'input. Sblocca il workflow undo per
+  gli utenti che non vedono l'`audit_id` nella response del tool
+  in Claude Desktop (UX bug E2E confermato 2026-05-01: utente
+  passa `record_uuid` a `undo` invece di `audit_id` → "audit_id
+  not found").
+- Opzioni: `--recent N` (default 10), `--tool <name>` filter,
+  `--json` per output strutturato.
+- Esempio output:
+  ```
+  1b919e75-…  2026-05-01T18:31:49Z  file_document  APPLY   A7385787-…
+  4f4e586a-…  2026-05-01T18:30:45Z  file_document  preview A7385787-…
+  ```
+- Backed by nuovo metodo `AuditLog.list_recent(limit, tool_name)`
+  con projection lightweight (no `before_state`/`after_state`).
+
+### Verified
+- 14 test `test_audit.py` pass (era 10, +4: newest-first ordering,
+  tool filter, error_code surfacing, empty log)
+- 157 test totali (era 153)
+- Smoke CLI: `uv run istefox-dt-mcp audit list --recent 5`
+  ritorna i 5 audit più recenti correttamente
+- Server bumped a v0.0.23
+
+---
+
 ## [0.0.22] — 2026-05-01 — `user_config` MCPB → env vars (UI configurabile da Claude Desktop)
 
 ### Added
