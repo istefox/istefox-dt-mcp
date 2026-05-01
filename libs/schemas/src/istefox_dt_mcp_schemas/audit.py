@@ -30,4 +30,13 @@ class AuditEntry(StrictModel):
         default=None,
         description="State snapshot before write op, used for selective undo",
     )
+    after_state: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "State snapshot after a successful write op. Used by undo "
+            "to detect drift precisely: if the current DT state matches "
+            "after_state, undo can revert safely; otherwise something "
+            "external changed the record after this audit entry."
+        ),
+    )
     error_code: str | None = None

@@ -8,9 +8,38 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ### Added
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
-- (post-MVP) After-state esplicito nell'audit log
 - (post-MVP) Multi-step undo (chain audit_ids)
 - (post-MVP) ADR-008 model selection benchmark MiniLM vs bge-m3
+
+---
+
+## [0.0.10] — 2026-05-01 — W10: after-state esplicito nell'audit log
+
+### Added
+- **`AuditEntry.after_state: dict | None`** — snapshot dello stato
+  del record subito dopo un'apply riuscita. Persistito in tabella
+  separata `audit_after_state` (PRIMARY KEY su audit_id, append-only,
+  triggers anti-UPDATE/DELETE come per `audit_log` e
+  `preview_consumption`). `audit_log` resta 100% immutabile.
+- **`AuditLog.set_after_state(audit_id, state) -> bool`** — INSERT
+  one-shot. Ritorna False se già impostato (PK collision).
+- **`AuditLog.get(audit_id)`** ora include `after_state` via LEFT JOIN.
+- **`file_document` popola after_state** dopo apply riuscita: usa
+  `before_state + preview` per ricostruire il post-stato senza
+  refetch (location finale, tags = before ∪ added − removed).
+- **`bulk_apply` popola after_state** con la lista di op effettivamente
+  applicate (filtrate da `outcomes` con status `applied`).
+- **`undo_audit` usa `after_state` per drift detection precisa**
+  (W10+): drift = `current` ≠ `after_state`. Fallback all'euristica
+  legacy se after_state mancante (entry pre-W10).
+
+### Changed
+- Server bumped a v0.0.10.
+- Docstring di `undo.py` aggiornato per documentare la nuova logica.
+
+### Verified
+- 132 test unit pass (era 127, +5: 2 audit, 1 file_document, 2 undo)
+- mypy strict + ruff + black puliti
 
 ---
 

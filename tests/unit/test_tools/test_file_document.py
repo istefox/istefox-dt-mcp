@@ -253,6 +253,42 @@ async def test_apply_with_expired_token_is_rejected(
 
 
 @pytest.mark.asyncio
+async def test_audit_log_persists_after_state_on_apply(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """W10: after_state should hold the post-apply snapshot."""
+    mock_adapter.get_record.return_value = _record(location="/Inbox", tags=["alpha"])
+    mock_adapter.classify_record.return_value = [
+        ClassifySuggestion(location="/Business/X", score=0.9)
+    ]
+    mock_adapter.move_record.return_value = MoveResult(
+        uuid="u",
+        outcome=WriteOutcome.APPLIED,
+        location_before="/Inbox",
+        location_after="/Business/X",
+    )
+    mock_adapter.apply_tag.return_value = TagResult(
+        uuid="u",
+        outcome=WriteOutcome.APPLIED,
+        tags_before=["alpha"],
+        tags_after=["alpha", "X"],
+    )
+    fn = _register_file_document_and_get_callable(deps)
+    preview = await fn(FileDocumentInput(record_uuid="u", dry_run=True))
+    apply = await fn(
+        FileDocumentInput(
+            record_uuid="u", dry_run=False, confirm_token=preview.data.preview_token
+        )
+    )
+    entry = deps.audit.get(apply.audit_id)
+    assert entry is not None
+    assert entry.after_state is not None
+    assert entry.after_state["location"] == "/Business/X"
+    # Tags after = union of before-tags and added — sorted
+    assert entry.after_state["tags"] == ["X", "alpha"]
+
+
+@pytest.mark.asyncio
 async def test_audit_log_persists_before_state(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
