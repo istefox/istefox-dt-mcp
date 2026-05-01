@@ -6,11 +6,63 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W9) Test strategy completa Tier 2-4 — `ADR-005`
-- (post-MVP) Multi-step undo (chain audit_ids)
-- (post-MVP) ADR-008 model selection benchmark MiniLM vs bge-m3
-- (post-MVP) Integrazione `user_config` MCPB → env vars del server
+- (post-MVP) Tier 2-4 testing executed (cassettes + integration su DT reale)
+- (post-MVP) CI macOS GHA per integration nightly + on-PR
+- (0.2.0) RAG benchmark cross-corpus + flip default modello (ADR-008)
+- (0.2.0) Integrazione `user_config` MCPB → env vars del server
   (RAG_ENABLED, RAG_MODEL, PREVIEW_TTL_S)
+
+---
+
+## [0.0.21] — 2026-05-01 — Pre-0.1.0 polish: server-side validation, perf, portability
+
+Bundle di fix non funzionali in vista della release 0.1.0 pubblica.
+Tutti retro-compatibili (no breaking changes nei tool MCP).
+
+### Added
+- **`destination_hint` validato server-side** in `file_document`.
+  Hint malformati come `/Triage` (manca DB prefix) ora vengono
+  rifiutati immediatamente in dry_run con `DATABASE_NOT_FOUND` e
+  un `recovery_hint` che include la lista dei database aperti +
+  esempio formato corretto. Niente più round-trip JXA inutile.
+- **`safe_call` rispetta `recovery_hint` per-instance** delle
+  AdapterError; il translator i18n statico resta fallback per
+  errori senza contesto. Permette messaggi d'errore arricchiti
+  con dati di runtime.
+- **`ISTEFOX_FAST_LIST_DATABASES=1` env var**: salta il computo di
+  `record_count` in `list_databases` (ritorna `null`). Mitigation
+  per database con >10k record dove `d.contents().length` è lento
+  alla cold cache. Cache key separato. Default invariato.
+- **Bundle uv detection esteso**: aggiunti path mise (shim +
+  installs glob) e asdf shim. Override esplicito via
+  `ISTEFOX_UV_BIN` env var. Messaggio d'errore install include
+  istruzioni mise/cargo/curl + lista path probati per debug.
+
+### Documentation
+- **ADR-008 status: Proposed → Deferred to 0.2.0**. Razionale del
+  rinvio (single-corpus bias, GOLD_QUERIES manuali expensive,
+  pattern feature flag) + criteri di sblocco 0.2.0 (≥3 corpus,
+  ≥2 early adopter, MRR/recall/latency invariati).
+- **README**: nuova sezione "Performance tuning (env vars)" che
+  documenta `ISTEFOX_FAST_LIST_DATABASES`, `ISTEFOX_PREVIEW_TTL_S`,
+  `ISTEFOX_RAG_*`. Disclaimer pre-release in cima. Sezione RAG
+  marcata "experimental in 0.1.0".
+- **`AskDatabaseInput` docstring**: rimosso riferimento obsoleto
+  a "v1 BM25-only, vector in W6"; ora riflette stato reale 0.0.x
+  (BM25 default, vector opt-in via env var).
+
+### Changed
+- **License: Proprietary → MIT**. `LICENSE` file creato, `manifest.json`
+  aggiornato, README sezione "Licenza" riscritta. Sblocca
+  submission a `modelcontextprotocol/servers` e accettazione PR
+  esterne. Repo GitHub flippato a `public`.
+
+### Verified
+- 141 test unit pass (era 137, +4: 2 destination_hint validation +
+  2 list_databases env var)
+- mypy strict + ruff + black puliti
+- License MIT indicizzata da GitHub
+- Server bumped a v0.0.21
 
 ---
 
