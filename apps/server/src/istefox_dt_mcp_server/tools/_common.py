@@ -13,13 +13,12 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 from istefox_dt_mcp_adapter.errors import AdapterError
+from istefox_dt_mcp_schemas.common import Envelope
 
 from ..audit import timer
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-
-    from istefox_dt_mcp_schemas.common import Envelope
 
     from ..deps import Deps
 
@@ -27,14 +26,14 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 
-async def safe_call[T](
+async def safe_call[T, OutT: Envelope[Any]](
     *,
     tool_name: str,
     input_data: dict[str, Any],
     deps: Deps,
     operation: Callable[[], Awaitable[T]],
-    output_factory: Callable[..., Envelope[T]],
-) -> Envelope[T]:
+    output_factory: Callable[..., OutT],
+) -> OutT:
     """Run `operation`, capture errors, persist audit, return envelope.
 
     `output_factory` is the concrete `<Tool>Output` class.

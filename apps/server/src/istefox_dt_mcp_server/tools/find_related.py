@@ -10,6 +10,7 @@ from ._common import safe_call
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+    from istefox_dt_mcp_schemas.common import RelatedResult
 
     from ..deps import Deps
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 def register(mcp: FastMCP, deps: Deps) -> None:
     @mcp.tool()
     async def find_related(input: FindRelatedInput) -> FindRelatedOutput:  # noqa: A002
-        async def op():
+        async def op() -> list[RelatedResult]:
             return await deps.adapter.find_related(input.uuid, k=input.k)
 
         return await safe_call(

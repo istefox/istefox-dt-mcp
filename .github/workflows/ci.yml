@@ -43,7 +43,6 @@ jobs:
   mypy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true  # advisory in v1
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3

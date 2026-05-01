@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from typing import Any
 
 import click
 
@@ -53,7 +54,7 @@ def doctor() -> None:
     """Run a health check and print diagnostics."""
     deps = build_default_deps()
 
-    async def run() -> dict:
+    async def run() -> dict[str, Any]:
         health = await deps.adapter.health_check()
         return health.model_dump()
 

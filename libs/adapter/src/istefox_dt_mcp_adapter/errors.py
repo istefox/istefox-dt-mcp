@@ -11,6 +11,20 @@ from typing import TYPE_CHECKING
 
 from istefox_dt_mcp_schemas.errors import ErrorCode
 
+__all__ = [
+    "AdapterError",
+    "DTNotRunningError",
+    "DTVersionIncompatibleError",
+    "DatabaseNotFoundError",
+    "ErrorCode",
+    "JXAError",
+    "JXAParseError",
+    "JXATimeoutError",
+    "RateLimitedError",
+    "RecordNotFoundError",
+    "ValidationError",
+]
+
 if TYPE_CHECKING:
     from uuid import UUID
 
