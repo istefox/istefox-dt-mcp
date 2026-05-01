@@ -36,6 +36,7 @@ mkdir -p "${STAGING}"
 INCLUDE=(
     "manifest.json"
     "bundle_main.py"
+    "bundle_main.sh"
     "pyproject.toml"
     "uv.lock"
     "README.md"
