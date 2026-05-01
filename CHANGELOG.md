@@ -12,6 +12,43 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.26] — 2026-05-01 — Integration test fixes (search reference_url + bench skip)
+
+Discovery dal primo run E2E real degli integration test (Stefano,
+2026-05-01 21:51, Terminal.app con TCC granted, DB Inbox aperto):
+5/7 PASS, 2 FAIL — entrambi bug reali.
+
+### Fixed
+- **`search_bm25.js` reference_url empty**: per record di tipo
+  speciale (smart group, feed item, missing file placeholder), DT
+  ritorna empty/null da `r.referenceUrl()` anche se l'uuid e'
+  valido. Il safe() wrapper lasciava passare `""`, lo schema
+  Pydantic lo accetta, ma i caller si aspettavano un deep link
+  utilizzabile.
+  Fix: fallback a `"x-devonthink-item://" + uuid` quando
+  `referenceUrl()` ritorna empty. Garantisce sempre un link
+  funzionale.
+- **`test_get_record_latency_p95_under_500ms` AttributeError**:
+  pyproject.toml ha `--benchmark-disable` in addopts (sano per
+  unit/contract). Quando la latency test era invocata con
+  `pytest -m integration` SENZA `--benchmark-enable`,
+  `benchmark.stats` restava `None` e il test crashava con
+  AttributeError invece di skippare clean.
+  Fix: detection di `benchmark.stats is None` con `pytest.skip()`
+  e messaggio actionable che indica il flag corretto.
+- **`tests/integration/README.md`**: aggiunte 2 note di setup
+  (richiede `--benchmark-enable` per latency, Warp/Tabby falliscono
+  TCC).
+
+### Verified
+- 163 unit + contract pass (no regression)
+- mypy + ruff + black clean
+- Test integration sara' validato da Stefano con bundle 0.0.26 +
+  Terminal.app (atteso: 6 PASS smoke + 1 latency con `mean<500ms`
+  quando lanciato con `--benchmark-enable`)
+
+---
+
 ## [0.0.25] — 2026-05-01 — Doctor + smoke: detection precoce TCC permission
 
 ### Added
