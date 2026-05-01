@@ -71,13 +71,15 @@ jobs:
         # The autouse dt_running fixture skips with an actionable
         # reason when DT isn't running. We assert that:
         #   - exit code is 0 (no error, no failure — only skips)
-        #   - all 7 integration tests are reported as skipped
+        #   - the pytest summary reports skipped tests
+        # Pytest summary line shape: "===== N skipped in 0.16s ====="
+        # Pattern accepts the leading "=" pad, plain numbers, and
+        # also "X passed, Y skipped" combos for safety.
         run: |
           set -o pipefail
           uv run pytest tests/integration -m integration --tb=short \
               --benchmark-disable --no-header -q | tee result.txt
-          # Sanity: at least 6 skips reported
-          grep -E '^[0-9]+ skipped' result.txt || {
+          grep -Eq '[0-9]+ skipped' result.txt || {
             echo "::error::Integration suite did not skip as expected"
             exit 1
           }

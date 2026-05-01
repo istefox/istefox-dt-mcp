@@ -164,16 +164,22 @@ def test_list_recent_returns_newest_first(audit_log: AuditLog) -> None:
     """Three appends + list_recent(limit=2) should return the two
     most recent in newest-first order."""
     a1 = audit_log.append(
-        tool_name="search", input_data={"q": "first"}, output_data=[],
+        tool_name="search",
+        input_data={"q": "first"},
+        output_data=[],
         duration_ms=1.0,
     )
     a2 = audit_log.append(
-        tool_name="file_document", input_data={"dry_run": True},
-        output_data={}, duration_ms=2.0,
+        tool_name="file_document",
+        input_data={"dry_run": True},
+        output_data={},
+        duration_ms=2.0,
     )
     a3 = audit_log.append(
-        tool_name="file_document", input_data={"dry_run": False},
-        output_data={}, duration_ms=3.0,
+        tool_name="file_document",
+        input_data={"dry_run": False},
+        output_data={},
+        duration_ms=3.0,
     )
     rows = audit_log.list_recent(limit=2)
     assert len(rows) == 2
@@ -188,14 +194,21 @@ def test_list_recent_returns_newest_first(audit_log: AuditLog) -> None:
 def test_list_recent_filters_by_tool(audit_log: AuditLog) -> None:
     """tool_name filter should restrict the result set."""
     audit_log.append(
-        tool_name="search", input_data={}, output_data=[], duration_ms=1.0,
+        tool_name="search",
+        input_data={},
+        output_data=[],
+        duration_ms=1.0,
     )
     fd_id = audit_log.append(
-        tool_name="file_document", input_data={"dry_run": False},
-        output_data={}, duration_ms=2.0,
+        tool_name="file_document",
+        input_data={"dry_run": False},
+        output_data={},
+        duration_ms=2.0,
     )
     audit_log.append(
-        tool_name="list_databases", input_data={}, output_data=[],
+        tool_name="list_databases",
+        input_data={},
+        output_data=[],
         duration_ms=3.0,
     )
     rows = audit_log.list_recent(limit=10, tool_name="file_document")
@@ -208,8 +221,11 @@ def test_list_recent_includes_error_code(audit_log: AuditLog) -> None:
     """Error rows should expose their error_code so the user can spot
     failed applies (which are not undoable) at a glance."""
     audit_log.append(
-        tool_name="file_document", input_data={"dry_run": False},
-        output_data=None, duration_ms=1.0, error_code="RECORD_NOT_FOUND",
+        tool_name="file_document",
+        input_data={"dry_run": False},
+        output_data=None,
+        duration_ms=1.0,
+        error_code="RECORD_NOT_FOUND",
     )
     rows = audit_log.list_recent(limit=1)
     assert rows[0]["error_code"] == "RECORD_NOT_FOUND"
