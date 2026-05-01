@@ -208,3 +208,53 @@ class RateLimitedError(AdapterError):
             audit_id=audit_id,
         )
         self.retry_after_s = retry_after_s
+
+
+# ----------------------------------------------------------------------
+# Preview-token errors (server-side, server's preview-then-apply gate)
+#
+# These live alongside the bridge errors because they share the same
+# (code, message, recovery_hint) shape and ride the same `safe_call`
+# catch path. The provenance label is "AdapterError" but the trigger
+# point is server-side validation, not the JXA bridge.
+# ----------------------------------------------------------------------
+
+
+class InvalidPreviewTokenError(AdapterError):
+    code = ErrorCode.INVALID_PREVIEW_TOKEN
+
+    def __init__(self, reason: str = "") -> None:
+        super().__init__(
+            f"preview token invalid{(': ' + reason) if reason else ''}",
+            recovery_hint=(
+                "Esegui di nuovo il tool con dry_run=true per ottenere un nuovo "
+                "preview_token, poi usalo come confirm_token nella chiamata di apply."
+            ),
+        )
+
+
+class ExpiredPreviewTokenError(AdapterError):
+    code = ErrorCode.EXPIRED_PREVIEW_TOKEN
+
+    def __init__(self, age_s: float) -> None:
+        super().__init__(
+            f"preview token expired ({age_s:.0f}s old)",
+            recovery_hint=(
+                "I preview_token scadono dopo 5 minuti. "
+                "Esegui di nuovo il tool con dry_run=true per generarne uno fresco."
+            ),
+        )
+        self.age_s = age_s
+
+
+class ConsumedPreviewTokenError(AdapterError):
+    code = ErrorCode.CONSUMED_PREVIEW_TOKEN
+
+    def __init__(self) -> None:
+        super().__init__(
+            "preview token already consumed",
+            recovery_hint=(
+                "Ogni preview_token può essere usato una sola volta. "
+                "Esegui di nuovo il tool con dry_run=true per generarne uno nuovo."
+            ),
+        )
