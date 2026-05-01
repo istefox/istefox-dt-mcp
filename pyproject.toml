@@ -7,6 +7,18 @@ requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "Stefano Ferri", email = "stefano@stefer.it" }]
 
+# Pulling istefox-dt-mcp-server transitively installs adapter,
+# schemas and sidecar via workspace path-deps. Required for the
+# .mcpb bundle: the host runs `uv sync` and `uv run python
+# bundle_main.py`, and the entry-point needs the server package
+# importable in the venv.
+dependencies = [
+    "istefox-dt-mcp-server",
+]
+
+[tool.uv.sources]
+istefox-dt-mcp-server = { workspace = true }
+
 [tool.uv.workspace]
 members = ["apps/*", "libs/*"]
 
