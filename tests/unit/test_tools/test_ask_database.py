@@ -27,12 +27,8 @@ async def test_ask_database_retrieval_returns_citations(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
     mock_adapter.search.return_value = [
-        SearchResult(
-            uuid="u1", name="doc1", location="/A", reference_url="x-d://1"
-        ),
-        SearchResult(
-            uuid="u2", name="doc2", location="/B", reference_url="x-d://2"
-        ),
+        SearchResult(uuid="u1", name="doc1", location="/A", reference_url="x-d://1"),
+        SearchResult(uuid="u2", name="doc2", location="/B", reference_url="x-d://2"),
     ]
     mock_adapter.get_record_text.side_effect = ["text 1", "text 2"]
 
@@ -51,9 +47,7 @@ async def test_ask_database_retrieval_returns_citations(
             )
             for h in hits
         ]
-        return AskDatabaseAnswer(
-            answer=RETRIEVAL_PLACEHOLDER_ANSWER, citations=cites
-        )
+        return AskDatabaseAnswer(answer=RETRIEVAL_PLACEHOLDER_ANSWER, citations=cites)
 
     out: AskDatabaseOutput = await safe_call(
         tool_name="ask_database",
@@ -84,9 +78,7 @@ async def test_ask_database_skip_citations_flag(
 
         # include_citations=False: skip get_record_text calls
         await mock_adapter.search("question", max_results=8)
-        return AskDatabaseAnswer(
-            answer=RETRIEVAL_PLACEHOLDER_ANSWER, citations=[]
-        )
+        return AskDatabaseAnswer(answer=RETRIEVAL_PLACEHOLDER_ANSWER, citations=[])
 
     out: AskDatabaseOutput = await safe_call(
         tool_name="ask_database",
@@ -111,9 +103,7 @@ async def test_ask_database_empty_search(deps: Deps, mock_adapter: AsyncMock) ->
         from istefox_dt_mcp_schemas.tools import AskDatabaseAnswer
 
         await mock_adapter.search("question", max_results=8)
-        return AskDatabaseAnswer(
-            answer=RETRIEVAL_PLACEHOLDER_ANSWER, citations=[]
-        )
+        return AskDatabaseAnswer(answer=RETRIEVAL_PLACEHOLDER_ANSWER, citations=[])
 
     out = await safe_call(
         tool_name="ask_database",

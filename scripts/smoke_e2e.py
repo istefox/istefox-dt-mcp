@@ -35,7 +35,9 @@ def _percentile(values: list[float], p: float) -> float:
     return s[k]
 
 
-async def _measure(label: str, op, iterations: int = ITERATIONS_PER_OP) -> tuple[list[float], object]:
+async def _measure(
+    label: str, op, iterations: int = ITERATIONS_PER_OP
+) -> tuple[list[float], object]:
     samples: list[float] = []
     last = None
     for _ in range(iterations):
@@ -54,9 +56,7 @@ async def _measure(label: str, op, iterations: int = ITERATIONS_PER_OP) -> tuple
 async def main() -> int:
     print("=== istefox-dt-mcp smoke E2E (real DEVONthink) ===\n")
 
-    cache = SQLiteCache(
-        path="/tmp/istefox_smoke_cache.sqlite", default_ttl_s=60.0
-    )
+    cache = SQLiteCache(path="/tmp/istefox_smoke_cache.sqlite", default_ttl_s=60.0)
     # Wipe smoke cache so latency numbers reflect cold paths, not the
     # previous run. The benchmark itself measures back-to-back so
     # iterations 2..N are warm by design.
@@ -139,10 +139,18 @@ async def main() -> int:
     # from the GUI; carrying the same target as cheap reads would force
     # us to misrepresent the bridge.
     print("\n=== W2 GO/NO-GO checkpoint ===")
-    fast = [s for k, samples in all_samples.items()
-            if not k.startswith("find_related") for s in samples]
-    compare = [s for k, samples in all_samples.items()
-               if k.startswith("find_related") for s in samples]
+    fast = [
+        s
+        for k, samples in all_samples.items()
+        if not k.startswith("find_related")
+        for s in samples
+    ]
+    compare = [
+        s
+        for k, samples in all_samples.items()
+        if k.startswith("find_related")
+        for s in samples
+    ]
 
     fast_p95 = _percentile(fast, 0.95)
     compare_p95 = _percentile(compare, 0.95)
