@@ -61,6 +61,7 @@ async def safe_call[T, OutT: Envelope[Any]](
     deps: Deps,
     operation: Callable[[], Awaitable[T]],
     output_factory: Callable[..., OutT],
+    before_state: dict[str, Any] | None = None,
 ) -> OutT:
     """Run `operation`, capture errors, persist audit, return envelope.
 
@@ -69,6 +70,10 @@ async def safe_call[T, OutT: Envelope[Any]](
     - `tool_ok` or `tool_failed` (INFO/WARNING): with duration + outcome
 
     `output_factory` is the concrete `<Tool>Output` class.
+
+    `before_state` is opt-in for write tools that want to record a
+    snapshot for selective undo (W7+: file_document, bulk_apply).
+    The audit log persists it verbatim — keep it small and JSON-safe.
     """
     request_id = str(uuid4())
     structlog.contextvars.bind_contextvars(
@@ -88,6 +93,7 @@ async def safe_call[T, OutT: Envelope[Any]](
                     output_data=None,
                     duration_ms=t.duration_ms,
                     error_code=e.code.value,
+                    before_state=before_state,
                 )
                 structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
                 log.warning(
@@ -109,6 +115,7 @@ async def safe_call[T, OutT: Envelope[Any]](
             input_data=input_data,
             output_data=data,
             duration_ms=t.duration_ms,
+            before_state=before_state,
         )
         structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
         log.info("tool_ok", duration_ms=round(t.duration_ms, 1))

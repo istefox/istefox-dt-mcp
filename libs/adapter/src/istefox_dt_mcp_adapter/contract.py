@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from istefox_dt_mcp_schemas.common import (
+        ClassifySuggestion,
         Database,
         HealthStatus,
         MoveResult,
@@ -101,6 +102,25 @@ class DEVONthinkAdapter(ABC):
         dry_run: bool = True,
     ) -> TagResult:
         """Add a tag to a record. Idempotent. Honors dry_run."""
+
+    @abstractmethod
+    async def remove_tag(
+        self,
+        uuid: str,
+        tag: str,
+        *,
+        dry_run: bool = True,
+    ) -> TagResult:
+        """Remove a tag from a record. Idempotent. Honors dry_run."""
+
+    @abstractmethod
+    async def classify_record(
+        self,
+        uuid: str,
+        *,
+        top_n: int = 3,
+    ) -> list[ClassifySuggestion]:
+        """Ask DT4 native classifier where this record should go."""
 
     @abstractmethod
     async def move_record(

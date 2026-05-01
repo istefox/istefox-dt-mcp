@@ -6,10 +6,54 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W7) `file_document` con `dry_run` mandatory + audit before_state + `confirm_token` flow
-- (W7+) `bulk_apply`, `undo` (schema già pronti)
+- (W7+) `bulk_apply` (schema già pronto, impl post-MVP)
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
+
+---
+
+## [0.0.7] — 2026-05-01 — W7: file_document write tool + undo
+
+### Added
+- **`file_document` MCP tool** (write, dry-run by default):
+  - **Preview-then-apply** flow: `dry_run=true` ritorna
+    `FileDocumentPreview` + `preview_token` (audit_id)
+  - Apply: `dry_run=false` (+ optional `confirm_token`) muove record
+    + applica tag suggeriti. `confirm_token` advisory in v0.0.7
+    (warning se mancante; hard enforcement post-MVP).
+  - Logica preview: `destination_hint` override → DT4 native
+    `classify_record` → no-op se classifica suggerisce posizione
+    corrente. Tag heuristic: leaf segment della destination.
+- **`adapter.classify_record(uuid, top_n)`** nel `DEVONthinkAdapter`
+  ABC + impl `JXAAdapter` + script JXA `classify.js` defensive
+  (wraps `DT.classify({record:r})`).
+- **`adapter.remove_tag(uuid, tag, dry_run)`** nuovo metodo +
+  script JXA `remove_tag.js`. Necessario per supportare undo
+  (rimuove i tag aggiunti dal `file_document`).
+- **`safe_call` accetta `before_state`** opzionale: write tools
+  passano uno snapshot `{uuid, location, tags, name}` che viene
+  persistito nell'audit log per undo selettivo.
+- **`undo_audit(audit_id, dry_run, force)`** in `apps/server/undo.py`:
+  - Legge audit entry + before_state
+  - Drift detection: se record è stato modificato dopo l'op
+    originale, blocca con `drift_detected=True` (override `--force`)
+  - Reverse: move back + remove tags aggiunti
+- **`undo <audit_id>` CLI command** con `--apply` (default dry-run)
+  e `--force` (bypass drift check).
+
+### Changed
+- `safe_call` signature: aggiunto `before_state: dict[str, Any] | None`
+- Server registra ora **5 MCP tool** (era 4): aggiunto `file_document`
+
+### Verified
+- 112 test unit pass (100 W6 + 12 nuovi: 6 file_document, 6 undo)
+- mypy strict + ruff + black puliti
+
+### Pending post-MVP
+- `bulk_apply` impl (schema già pronto da W4)
+- Hard enforcement `confirm_token` (TTL su preview tokens)
+- After-state esplicito nell'audit (oggi inferito da diff)
+- Multi-step undo (chain di audit_id)
 
 ---
 

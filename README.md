@@ -18,7 +18,13 @@ Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dict
 | `search` | read (BM25 + semantic + hybrid RRF) | ✅ implementato | W1-W2, hybrid W5 |
 | `find_related` | read (See Also/Compare) | ✅ implementato | W1-W2 |
 | `ask_database` | read (vector + BM25 fallback) | ✅ implementato | W3, vector W5 |
-| `file_document` | write con `dry_run` | ⏳ schema pronto | W7 |
+| `file_document` | write con `dry_run` + undo | ✅ implementato | W7 |
+
+**MVP completo**: tutti e 5 i tool MCP target sono operativi end-to-end.
+Il `file_document` segue il pattern preview-then-apply: chiamarlo con
+`dry_run=true` ritorna un preview + `preview_token` (audit_id), poi
+con `dry_run=false` + `confirm_token=<preview_token>` viene applicato
+e l'`audit_id` permette `undo` selettivo via CLI.
 
 Esclusi da MVP (post-W7): `summarize_topic`, `bulk_apply`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
 
@@ -109,7 +115,7 @@ l'app coinvolta nel `recovery_hint`.
 uv run ruff check .
 uv run black --check .
 
-# Test unit (100 test, ~4s)
+# Test unit (112 test, ~4s)
 uv run pytest tests/unit -v
 
 # Test con coverage

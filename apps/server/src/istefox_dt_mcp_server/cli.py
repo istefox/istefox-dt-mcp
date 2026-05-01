@@ -121,6 +121,41 @@ def reconcile(database: str) -> None:
 
 
 @cli.command()
+@click.argument("audit_id")
+@click.option(
+    "--apply",
+    "apply_changes",
+    is_flag=True,
+    default=False,
+    help="Actually apply the undo (default is dry-run preview).",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Bypass drift detection — overwrite intervening edits.",
+)
+def undo(audit_id: str, apply_changes: bool, force: bool) -> None:
+    """Revert a previously applied write tool by audit_id.
+
+    Looks up the audit log entry, reads its before_state snapshot,
+    and reverses the write (move back + remove added tags).
+    Currently only `file_document` audits are supported.
+    """
+    from .undo import undo_audit
+
+    deps = build_default_deps()
+
+    async def run() -> dict[str, object]:
+        return await undo_audit(deps, audit_id, dry_run=not apply_changes, force=force)
+
+    result = asyncio.run(run())
+    click.echo(json.dumps(result, indent=2, default=str))
+    if not result.get("reverted") and apply_changes:
+        sys.exit(2)
+
+
+@cli.command()
 @click.option(
     "--port",
     type=int,
