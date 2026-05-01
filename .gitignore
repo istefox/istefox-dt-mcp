@@ -21,7 +21,7 @@ wheels/
 
 # uv
 .uv/
-uv.lock
+# Note: uv.lock IS committed (best practice for reproducible builds)
 
 # Testing & coverage
 .pytest_cache/
