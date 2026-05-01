@@ -1,26 +1,46 @@
 # istefox-dt-mcp
 
-MCP server "best-in-class" per DEVONthink 4 — dual-transport, multi-bridge, RAG-augmented.
+MCP server per DEVONthink 4 — outcome-oriented tools, RAG locale, production-grade. Stack Python 3.12 + FastMCP + ChromaDB + uv.
 
-> **Stato**: pre-implementazione. Brief architetturale v0.1 in attesa di review Cowork. Vedi [`CLAUDE.md`](CLAUDE.md), [`memory.md`](memory.md), [`handoff.md`](handoff.md).
+> **Stato**: W1-W2 in corso. Foundations + 3 tool read-only operativi. Vedi [`handoff.md`](handoff.md) per lo stato corrente, [`CLAUDE.md`](CLAUDE.md) per i vincoli, [`docs/adr/`](docs/adr/) per le decisioni consolidate.
 
 ---
 
-## Cosa fa (target)
+## Cosa fa
 
-Un connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dictionary:
+Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dictionary.
 
-- **Outcome-oriented tools**: `search`, `ask_database`, `find_related`, `summarize_topic`, `file_document`, `bulk_apply`, `create_smart_rule`
-- **RAG locale** con vector DB embedded (ChromaDB) per semantic search multilingue (IT/EN/FR/DE)
-- **Multi-bridge** con failover (JXA primario, x-callback-url, DT Server)
-- **Dual transport**: stdio (locale) + Streamable HTTP con OAuth 2.1 (remoto)
-- **Production-grade**: audit log, dry-run mandatory, observability, recovery
+**MVP (5 tool, sequenza implementazione W1-W7)**:
+
+| Tool | Tipo | Stato | Settimana |
+|---|---|---|---|
+| `list_databases` | read | ✅ implementato | W1-W2 |
+| `search` | read (BM25) | ✅ implementato | W1-W2 |
+| `find_related` | read (See Also/Compare) | ✅ implementato | W1-W2 |
+| `ask_database` | read (RAG Q&A) | ⏳ schema pronto | W4-W6 |
+| `file_document` | write con `dry_run` | ⏳ schema pronto | W7 |
+
+Esclusi da MVP (post-W7): `summarize_topic`, `bulk_apply`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
 
 ---
 
 ## Stack
 
-Python 3.12 + FastMCP + ChromaDB + uv. Vedi [`CLAUDE.md` §3](CLAUDE.md#3-stack-tecnologico-vincolato).
+| Componente | Tecnologia | Riferimento |
+|---|---|---|
+| Linguaggio | Python 3.12 | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| Framework MCP | FastMCP 3.x | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| Validazione | Pydantic v2 | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| Bridge DT | JXA-only v1 (astrazione multi-bridge ready) | [ADR-002](docs/adr/0002-bridge-architecture-jxa-only.md) |
+| Vector DB | ChromaDB embedded | [ADR-003](docs/adr/0003-rag-same-process.md) |
+| Embedding | `bge-m3` o `multilingual-e5-large` (W5) | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| Cache | SQLite WAL | — |
+| Test | pytest + 4-tier strategy | [ADR-005](docs/adr/0005-test-strategy-4-tier.md) |
+| Packaging | `uv` workspace + hatchling | — |
+| Logging | structlog (JSON su stderr) | — |
+| Distribuzione | `pipx` + `.mcpb` (W11) | — |
+
+Versione minima DT: **DEVONthink 4.0**. DT3 non supportato — vedi [ADR-007](docs/adr/0007-dt4-only.md).
 
 ---
 
@@ -29,33 +49,79 @@ Python 3.12 + FastMCP + ChromaDB + uv. Vedi [`CLAUDE.md` §3](CLAUDE.md#3-stack-
 ```
 .
 ├── apps/
-│   ├── server/      # MCP server FastMCP (stdio + http)
-│   └── sidecar/     # RAG sidecar (ChromaDB + embeddings + IPC)
+│   ├── server/      MCP server FastMCP (stdio v1; HTTP+OAuth → v2)
+│   └── sidecar/     RAG sidecar (ChromaDB + embeddings) — placeholder
 ├── libs/
-│   ├── adapter/     # Bridge layer (JXA, x-callback-url, DT Server)
-│   └── schemas/     # Pydantic schemas condivisi
-├── scripts/         # init, doctor, smart-rule installer
-├── tests/           # pytest (mocking JXA + integration su DT reale)
+│   ├── adapter/     Bridge JXA + cache + errors + script JXA
+│   └── schemas/     Pydantic v2 condivisi (common, tools, audit, errors)
+├── tests/
+│   ├── unit/        Test unit (43 test, 100% pass)
+│   ├── contract/    VCR-style cassette (placeholder)
+│   └── fixtures/    Fixture condivisi
 ├── docs/
-│   └── adr/         # Architecture Decision Records
-└── pyproject.toml   # uv workspace
+│   └── adr/         7 ADR consolidati
+├── .github/workflows/  CI (ubuntu) + integration (macos-14, manual) + release (placeholder)
+├── pyproject.toml   uv workspace + ruff + black + mypy + pytest
+├── CLAUDE.md        Vincoli obbligatori
+├── memory.md        Decisioni + contesto
+└── handoff.md       Passaggi tra sessioni
 ```
 
 ---
 
-## Setup (preliminare — richiede uv)
+## Setup
 
 ```bash
-# Installa uv (se non presente)
+# Prerequisiti: macOS, DEVONthink 4 installato
+
+# Install uv (se assente — alternativa: brew install uv)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Sync workspace
-uv sync
-
-# Run lint + test
-uv run ruff check .
-uv run pytest
+# Clone + sync workspace
+git clone https://github.com/istefox/istefox-dt-mcp.git
+cd istefox-dt-mcp
+uv sync --all-packages
 ```
+
+---
+
+## Quick start
+
+```bash
+# Lint + format check
+uv run ruff check .
+uv run black --check .
+
+# Test unit (43 test, ~1s)
+uv run pytest tests/unit -v
+
+# Test con coverage
+uv run pytest tests/unit --cov=apps --cov=libs --cov-report=term
+
+# CLI
+uv run istefox-dt-mcp --help
+uv run istefox-dt-mcp doctor       # health check (richiede DT in esecuzione)
+uv run istefox-dt-mcp serve        # avvia server stdio (per Claude Desktop)
+```
+
+---
+
+## Integrazione Claude Desktop (W2 preview)
+
+Aggiungi a `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "istefox-dt-mcp": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/istefox-dt-mcp", "run", "istefox-dt-mcp", "serve"]
+    }
+  }
+}
+```
+
+Poi riavvia Claude Desktop. I 3 tool read-only (`list_databases`, `search`, `find_related`) sono disponibili.
 
 ---
 
@@ -63,18 +129,21 @@ uv run pytest
 
 | File | Contenuto |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Vincoli obbligatori del progetto |
-| [`memory.md`](memory.md) | Decisioni consolidate + decisioni aperte |
-| [`handoff.md`](handoff.md) | Passaggio tra sessioni di lavoro |
-| `docs/adr/` | Architecture Decision Records |
-| `~/Downloads/ARCH-BRIEF-DT-MCP.md` | Brief architetturale completo (fonte di verità) |
+| [`CLAUDE.md`](CLAUDE.md) | Vincoli obbligatori del progetto (legali, MCP, DT, safety) |
+| [`memory.md`](memory.md) | Decisioni consolidate + decisioni aperte + contesto |
+| [`handoff.md`](handoff.md) | Stato corrente + prossimi passi |
+| [`docs/architecture.md`](docs/architecture.md) | Overview a layer della soluzione |
+| [`docs/adr/`](docs/adr/) | 7 ADR consolidati (stack, bridge, sidecar, MVP, test, DT4, ecc.) |
+| [`docs/adr/REVIEW_ADR.md`](docs/adr/REVIEW_ADR.md) | Architecture review v1.0 (input degli ADR formali) |
+| `ARCH-BRIEF-DT-MCP.md` | Brief architetturale v0.1 (fonte di verità storica) |
 
 ---
 
 ## Vincoli legali
 
 - **Implementazione clean-room**: nessun codice copiato da [`dvcrn/mcp-server-devonthink`](https://github.com/dvcrn/mcp-server-devonthink) (GPL-3.0).
-- **Privacy by design**: nessun dato dell'utente esce dalla macchina per default.
+- **Privacy by design**: nessun dato dell'utente esce dalla macchina per default. Embedding generati localmente, audit log locale.
+- **Namespace personale**: `istefox` (progetto non lavorativo).
 
 ---
 

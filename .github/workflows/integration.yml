@@ -1,0 +1,38 @@
+name: Integration (macOS)
+
+on:
+  workflow_dispatch:
+  # Once spike #9 confirms cost feasibility, enable:
+  # pull_request:
+  #   branches: [main]
+  # schedule:
+  #   - cron: "0 3 * * *"  # nightly 03:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-packages --frozen
+
+      - name: Smoke JXA (no DT installed in runner — expected fail until fixture is added)
+        run: |
+          osascript -l JavaScript -e 'JSON.stringify({ok: true})'
+          # When DT fixture is committable per ADR-005, install + smoke real DT here.
+
+      - name: Run integration tests (placeholder)
+        run: uv run pytest tests/integration -v --tb=short || echo "no integration tests yet"
