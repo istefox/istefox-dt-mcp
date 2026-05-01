@@ -5,15 +5,27 @@ The `safe_call` helper wraps adapter calls with:
 - structured error → italian translation
 - audit log entry (always, even on failure)
 - structured logging with bound `audit_id` + `tool` context
+
+The `validate_confirm_token` helper enforces preview-token integrity
+for write tools (file_document, bulk_apply): the token must be a
+known audit_id, must point to a previous dry_run of the *same* tool,
+must not have expired (TTL), and must not have been consumed before.
 """
 
 from __future__ import annotations
 
+import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import structlog
-from istefox_dt_mcp_adapter.errors import AdapterError
+from istefox_dt_mcp_adapter.errors import (
+    AdapterError,
+    ConsumedPreviewTokenError,
+    ExpiredPreviewTokenError,
+    InvalidPreviewTokenError,
+)
 from istefox_dt_mcp_schemas.common import Envelope
 
 from ..audit import timer
@@ -22,6 +34,25 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from ..deps import Deps
+
+
+# Preview tokens expire after 5 minutes (UX-driven: enough time for
+# the user to read the preview and confirm; short enough to bound
+# the window where stale state could be applied).
+DEFAULT_PREVIEW_TTL_S = 300
+
+# Env override for tests / power users
+_PREVIEW_TTL_ENV = "ISTEFOX_PREVIEW_TTL_S"
+
+
+def preview_ttl_s() -> int:
+    raw = os.environ.get(_PREVIEW_TTL_ENV)
+    if not raw:
+        return DEFAULT_PREVIEW_TTL_S
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_PREVIEW_TTL_S
 
 
 log = structlog.get_logger(__name__)
@@ -52,6 +83,52 @@ def _summarize_input(data: dict[str, Any]) -> dict[str, Any]:
         else:
             summary[k] = v
     return summary
+
+
+def validate_confirm_token(
+    deps: Deps,
+    *,
+    tool_name: str,
+    confirm_token: str | None,
+) -> None:
+    """Verify a preview_token before applying a write op.
+
+    Raises a `*PreviewTokenError` (caught by `safe_call`) on rejection.
+    On success, marks the token as consumed (one-shot enforcement).
+
+    Rejection cases:
+    - missing/malformed token → InvalidPreviewTokenError
+    - token doesn't reference a previous audit entry → InvalidPreviewTokenError
+    - audit entry is from a different tool → InvalidPreviewTokenError
+    - audit entry was an apply, not a preview → InvalidPreviewTokenError
+    - audit entry older than TTL → ExpiredPreviewTokenError
+    - token already consumed → ConsumedPreviewTokenError
+    """
+    if not confirm_token:
+        raise InvalidPreviewTokenError("missing")
+    try:
+        audit_id = UUID(confirm_token)
+    except ValueError as e:
+        raise InvalidPreviewTokenError("not a UUID") from e
+
+    entry = deps.audit.get(audit_id)
+    if entry is None:
+        raise InvalidPreviewTokenError("unknown audit_id")
+    if entry.tool_name != tool_name:
+        raise InvalidPreviewTokenError(
+            f"token belongs to {entry.tool_name}, not {tool_name}"
+        )
+    if entry.input_json.get("dry_run") is not True:
+        raise InvalidPreviewTokenError("token does not point to a dry_run preview")
+
+    age_s = (datetime.now(UTC) - entry.timestamp).total_seconds()
+    if age_s > preview_ttl_s():
+        raise ExpiredPreviewTokenError(age_s)
+
+    # Mark consumed atomically; a second caller racing with the same
+    # token loses the INSERT and we report CONSUMED back.
+    if not deps.audit.mark_consumed(audit_id):
+        raise ConsumedPreviewTokenError()
 
 
 async def safe_call[T, OutT: Envelope[Any]](

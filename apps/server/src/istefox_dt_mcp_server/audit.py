@@ -49,6 +49,26 @@ BEFORE DELETE ON audit_log
 BEGIN
     SELECT RAISE(ABORT, 'audit_log is append-only');
 END;
+
+-- Tracks consumed preview_tokens (one-shot apply protection).
+-- Separate table preserves audit_log append-only purity. Insert is
+-- the only allowed mutation; PRIMARY KEY enforces no double-consume.
+CREATE TABLE IF NOT EXISTS preview_consumption (
+    audit_id  TEXT PRIMARY KEY,
+    ts        TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE TRIGGER IF NOT EXISTS preview_no_update
+BEFORE UPDATE ON preview_consumption
+BEGIN
+    SELECT RAISE(ABORT, 'preview_consumption is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS preview_no_delete
+BEFORE DELETE ON preview_consumption
+BEGIN
+    SELECT RAISE(ABORT, 'preview_consumption is append-only');
+END;
 """
 
 
@@ -127,6 +147,32 @@ class AuditLog:
             before_state=json.loads(row[7]) if row[7] else None,
             error_code=row[8],
         )
+
+    def is_consumed(self, audit_id: UUID) -> bool:
+        """True if a preview token has already been used to apply."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM preview_consumption WHERE audit_id = ?",
+                (str(audit_id),),
+            ).fetchone()
+        return row is not None
+
+    def mark_consumed(self, audit_id: UUID) -> bool:
+        """Record one-shot consumption of a preview token.
+
+        Returns True on first consumption, False if already consumed
+        (PRIMARY KEY collision — the second caller loses the race).
+        """
+        ts = datetime.now(UTC).isoformat()
+        try:
+            with self._lock:
+                self._conn.execute(
+                    "INSERT INTO preview_consumption(audit_id, ts) VALUES(?, ?)",
+                    (str(audit_id), ts),
+                )
+        except sqlite3.IntegrityError:
+            return False
+        return True
 
     def close(self) -> None:
         with self._lock:

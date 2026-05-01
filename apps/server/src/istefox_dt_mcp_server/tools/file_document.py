@@ -13,9 +13,11 @@ Why two phases: the LLM should NEVER apply a write op directly. The
 client (Claude) shows the user what will change, the user confirms
 out-of-band, then the second call commits with the token.
 
-In v0.0.7 the `confirm_token` is advisory — we log a warning if
-missing on apply, but accept the call. Hard enforcement lands when
-we have a way to revoke / TTL the preview tokens (post-MVP).
+Since v0.0.9 the `confirm_token` is **hard-enforced**: apply calls
+without a valid, non-expired (TTL 5min default), unconsumed token
+that points back to a previous dry_run of *this* tool are rejected
+with `INVALID_PREVIEW_TOKEN` / `EXPIRED_PREVIEW_TOKEN` /
+`CONSUMED_PREVIEW_TOKEN`. Override TTL via `ISTEFOX_PREVIEW_TTL_S`.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from istefox_dt_mcp_schemas.tools import (
     FileDocumentResult,
 )
 
-from ._common import safe_call
+from ._common import safe_call, validate_confirm_token
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -87,11 +89,13 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                     preview_token=None,  # filled with audit_id by the wrapper
                 )
 
-            if not input.confirm_token:
-                log.warning(
-                    "file_document_apply_without_confirm_token",
-                    uuid=input.record_uuid,
-                )
+            # Hard enforcement: apply requires a valid, non-expired,
+            # unconsumed preview_token. Raises (caught by safe_call).
+            validate_confirm_token(
+                deps,
+                tool_name="file_document",
+                confirm_token=input.confirm_token,
+            )
 
             # Apply move
             if preview.destination_group:

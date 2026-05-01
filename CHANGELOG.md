@@ -8,10 +8,52 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ### Added
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
-- (post-MVP) Hard `confirm_token` enforcement con TTL
 - (post-MVP) After-state esplicito nell'audit log
 - (post-MVP) Multi-step undo (chain audit_ids)
 - (post-MVP) ADR-008 model selection benchmark MiniLM vs bge-m3
+
+---
+
+## [0.0.9] — 2026-05-01 — W9: hard preview_token enforcement con TTL
+
+### Added
+- **Hard enforcement del `confirm_token`** sui tool `file_document` e
+  `bulk_apply`. Il flow apply (`dry_run=false`) ora rifiuta con
+  `INVALID_PREVIEW_TOKEN` qualunque chiamata che non passi un token
+  valido.
+- **TTL 5 minuti** di default per i preview_token. Override via env
+  var `ISTEFOX_PREVIEW_TTL_S=<secondi>` per script/test. Token
+  scaduti rifiutati con `EXPIRED_PREVIEW_TOKEN`.
+- **One-shot consumption**: un token può essere applicato esattamente
+  una volta. Replay rifiutato con `CONSUMED_PREVIEW_TOKEN`.
+- **Cross-tool isolation**: un token di `file_document` non può
+  essere usato per applicare `bulk_apply` (e viceversa). Anche un
+  token che riferisce un'apply (non un preview) viene rifiutato.
+- Nuovi `ErrorCode`: `INVALID_PREVIEW_TOKEN`, `EXPIRED_PREVIEW_TOKEN`,
+  `CONSUMED_PREVIEW_TOKEN` con messaggi italiani + recovery hint
+  in `locales/it.toml`.
+- Nuove eccezioni adapter: `InvalidPreviewTokenError`,
+  `ExpiredPreviewTokenError`, `ConsumedPreviewTokenError` (sotto
+  `AdapterError` per riusare la pipeline `safe_call` → envelope
+  strutturato → translator i18n).
+- **Tabella `preview_consumption`** append-only nello schema audit
+  SQLite. PRIMARY KEY su `audit_id` garantisce atomicità e
+  protezione race-condition. Trigger anti-UPDATE/DELETE come per
+  `audit_log`. Mantiene `audit_log` 100% immutabile.
+- `AuditLog.is_consumed(audit_id)` e `AuditLog.mark_consumed(audit_id)`.
+- Helper condiviso `validate_confirm_token()` in `tools/_common.py`.
+
+### Changed
+- I docstring di `file_document` e `bulk_apply` aggiornati per
+  riflettere l'enforcement (era "advisory in v0.0.7/0.0.8").
+- Server bumped a v0.0.9.
+- Test esistenti aggiornati: i test apply ora prima fanno un
+  preview (per ottenere un token valido) e poi l'apply.
+
+### Verified
+- 127 test unit pass (era 121 W8, +6 nuovi: 4 file_document, 2 bulk_apply
+  per casi token rejection)
+- mypy strict + ruff + black puliti
 
 ---
 
