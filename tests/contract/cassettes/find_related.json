@@ -1,0 +1,5 @@
+{
+  "script": "find_related.js",
+  "argv": ["REC-SEED-0001-AAAA-BBBBCCCCDDDD", "10"],
+  "stdout": "[{\"uuid\":\"REC-REL-001-AAAA-BBBBCCCCDDDD\",\"name\":\"Documento simile A\",\"similarity\":0.87,\"location\":\"/privato/progetti/\",\"reference_url\":\"x-devonthink-item://REC-REL-001-AAAA-BBBBCCCCDDDD\"},{\"uuid\":\"REC-REL-002-AAAA-BBBBCCCCDDDD\",\"name\":\"Documento simile B\",\"similarity\":0.71,\"location\":\"/privato/progetti/2025/\",\"reference_url\":\"x-devonthink-item://REC-REL-002-AAAA-BBBBCCCCDDDD\"},{\"uuid\":\"REC-REL-003-AAAA-BBBBCCCCDDDD\",\"name\":\"Documento simile C\",\"similarity\":0.55,\"location\":\"/Inbox/\",\"reference_url\":\"x-devonthink-item://REC-REL-003-AAAA-BBBBCCCCDDDD\"}]"
+}
