@@ -14,6 +14,51 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.19] — 2026-05-01 — Doc: chiarito formato `destination_hint` (database prefix obbligatorio)
+
+### Fixed (UX/docs only — niente cambio di runtime)
+
+- **Tool descriptions di `file_document` e `bulk_apply` non documentavano**
+  che il primo segmento di `destination_hint` / `payload.destination`
+  deve essere il **nome di un database aperto**. Il LLM passava
+  paths come `/MCP-Test` interpretando come group puro, ma il
+  bridge JXA ricevuto `dbName="MCP-Test"` cercava un database con
+  quel nome → `DATABASE_NOT_FOUND`.
+- **Bug scoperto durante E2E apply effettivo** (sessione 2026-05-01):
+  Step 3 del test apply ha fallito con DATABASE_NOT_FOUND legittimo
+  ma confuso. Il LLM (Claude) ha interpretato "diagnostico errore
+  database" senza realizzare che il path era malformato.
+
+### Changed
+- `FileDocumentInput.destination_hint`: aggiunto Field(description=...)
+  con esempio esplicito (`/Inbox/Triage`, `/privato/Fatture/2026`)
+  e contro-esempio (`/Triage` → DATABASE_NOT_FOUND).
+- Docstring di `FileDocumentInput`: aggiunta sezione "Path format
+  for `destination_hint`" con regola chiara.
+- Docstring di `BulkApplyOperation`: chiarito formato per op `move`.
+  `payload.destination` description aggiornato.
+- Esempio aggiunto in FileDocumentInput.examples che usa
+  `destination_hint`.
+
+### Verified
+- 137 test unit pass invariati (modifica solo descriptions Pydantic)
+- mypy strict + ruff + black puliti
+- Server bumped a v0.0.19
+
+### Note metodologiche
+Bug catturabile solo via E2E reale, già la quarta volta in questa
+sessione (record_count, score, find_related self, JXA defensive,
+ora destination_hint). Conferma il valore del Tier 4 testing
+(ADR-005). I unit test mockano l'adapter quindi non vedono
+problemi semantici di output strutturato verso il LLM.
+
+Follow-up post-MVP: validation server-side del primo segmento di
+destination contro `list_databases` con cache, fail-fast con
+INVALID_INPUT + suggerimento. Trade-off: 1 chiamata extra
+adapter per file_document/bulk_apply move.
+
+---
+
 ## [0.0.18] — 2026-05-01 — Multi-step undo + uv detection portatile + ADR-008 framework
 
 Tre miglioramenti post-MVP consolidati in una release.

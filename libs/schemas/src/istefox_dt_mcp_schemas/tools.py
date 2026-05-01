@@ -189,8 +189,14 @@ class FileDocumentInput(StrictModel):
     - The user trusts DEVONthink's AI classifier and wants it applied.
 
     Don't use for:
-    - Bulk reorganization across many records -> use `bulk_apply` (post-MVP).
+    - Bulk reorganization across many records -> use `bulk_apply`.
     - Manual override of destination -> set `destination_hint`.
+
+    Path format for `destination_hint`:
+    - The first segment of the path MUST be the name of an open
+      DEVONthink database. Example: `/Inbox/MyGroup`, NOT `/MyGroup`.
+    - Use `list_databases` first to discover open database names.
+    - Missing groups along the path are auto-created.
 
     Safety:
     - `dry_run` defaults to true. Always preview before applying.
@@ -202,13 +208,27 @@ class FileDocumentInput(StrictModel):
     Examples:
     - {"record_uuid": "ABCD-...", "dry_run": true}
     - {"record_uuid": "ABCD-...", "dry_run": false, "confirm_token": "..."}
+    - {"record_uuid": "ABCD-...", "dry_run": true, "destination_hint": "/Inbox/Triage"}
     """
 
     record_uuid: str
     dry_run: bool = True
     auto_classify: bool = True
     auto_tag: bool = True
-    destination_hint: str | None = None
+    destination_hint: str | None = Field(
+        default=None,
+        description=(
+            "Optional destination group path. **Format: "
+            "`/<database>/<group>/<subgroup>...`** — the FIRST path "
+            "segment MUST be the name of an open DEVONthink database "
+            "(call `list_databases` to enumerate). Examples: "
+            "`/Inbox/Triage`, `/privato/Fatture/2026`. Passing just "
+            "`/Triage` will fail with DATABASE_NOT_FOUND because "
+            "`Triage` is interpreted as a database name. If the "
+            "leading group doesn't exist it's auto-created via "
+            "DT.createLocation."
+        ),
+    )
     confirm_token: str | None = Field(
         default=None,
         description=(
@@ -244,7 +264,10 @@ class BulkApplyOperation(StrictModel):
     Supported `op` values:
     - `add_tag` — payload: `{"tag": "<name>"}`
     - `remove_tag` — payload: `{"tag": "<name>"}`
-    - `move` — payload: `{"destination": "<group/path>"}`
+    - `move` — payload: `{"destination": "/<database>/<group>/..."}`
+      The first path segment MUST be the name of an open DEVONthink
+      database. Use `list_databases` to discover names. Example:
+      `/Inbox/Triage` (correct), `/Triage` (DATABASE_NOT_FOUND).
     """
 
     record_uuid: str
@@ -252,8 +275,9 @@ class BulkApplyOperation(StrictModel):
     payload: dict[str, str] = Field(
         default_factory=dict,
         description=(
-            "Op-specific args (e.g. {'tag': 'x'} for add_tag, "
-            "{'destination': 'A/B'} for move)"
+            "Op-specific args. add_tag/remove_tag: {'tag': 'x'}. "
+            "move: {'destination': '/<database>/<group>/...'} — first "
+            "segment MUST be an open database name."
         ),
     )
 
