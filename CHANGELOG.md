@@ -12,6 +12,39 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.25] — 2026-05-01 — Doctor + smoke: detection precoce TCC permission
+
+### Added
+- **`HealthStatus.permission_denied: bool`** + `recovery_hint: str | None`
+  per discriminare il caso DT-running-but-AppleEvents-denied dal
+  caso DT-not-running. Prima il doctor ritornava `dt_running:true,
+  bridge_ready:true` anche con permission denied, perche' testava
+  solo `running()` (proprietà che NON richiede permission).
+- **Doctor now does a 2-stage probe**: stage 1 `running()` (no
+  permission), stage 2 `databases().length` (DOES require
+  permission). Se stage 2 fallisce con -1743, ritorna
+  `permission_denied:true` + `recovery_hint` con istruzioni
+  specifiche per il fix (System Settings + tccutil).
+- **`bridge_ready`** ora richiede AND fra `dt_running` e
+  `not permission_denied` — riflette la realta' (un bridge senza
+  permesso non puo' fare nulla di utile).
+
+### Changed
+- **`scripts/smoke_e2e.sh` Step 2**: intercetta `-1743` nel
+  stderr di osascript e stampa il blocco recovery hint con le
+  3 strade di fix (Settings UI, tccutil reset, change terminal).
+  Prima ritornava un opaco `JXA returned non-numeric: 'ERR'`.
+
+### Verified
+- 157 unit pass (HealthStatus schema additivo, no breaking change)
+- ruff + mypy + black clean
+- bash -n smoke_e2e.sh OK
+- Discovery: il primo E2E real-world (2026-05-01 21:30) ha rivelato
+  che il terminale Warp di Stefano non aveva AppleEvents permission
+  per DT, ma doctor ritornava OK. Questa e' la fix.
+
+---
+
 ## [0.0.24] — 2026-05-01 — Undo: drift_details per debug visibile
 
 ### Added

@@ -116,6 +116,8 @@ class JXAAdapter(DEVONthinkAdapter):
         self._version_validated = False
 
     async def health_check(self) -> HealthStatus:
+        # Stage 1: process probe via running() — does NOT require
+        # AppleEvents permission. Tells us if DT is launched at all.
         try:
             running = await self._jxa_inline(
                 "JSON.stringify(Application('DEVONthink').running())"
@@ -130,8 +132,41 @@ class JXAAdapter(DEVONthinkAdapter):
                 sidecar_ready=False,
             )
 
+        if not dt_running:
+            return HealthStatus(
+                dt_running=False,
+                dt_version=None,
+                bridge_ready=False,
+                cache_ready=self._cache is not None,
+                sidecar_ready=False,
+            )
+
+        # Stage 2: data-access probe via databases() — DOES require
+        # AppleEvents permission (-1743 if denied). This is the
+        # actual readiness check; running() alone could mislead the
+        # caller into thinking the bridge works while every real
+        # call would error out.
+        permission_denied = False
+        recovery_hint: str | None = None
+        try:
+            await self._jxa_inline(
+                "JSON.stringify(Application('DEVONthink').databases().length)"
+            )
+        except AutomationPermissionError:
+            permission_denied = True
+            recovery_hint = (
+                "AppleEvents permesso negato per il processo che chiama "
+                "DEVONthink. Apri System Settings -> Privacy & Security -> "
+                "Automation, espandi l'app chiamante (Warp/iTerm/Terminal/"
+                "Claude) e abilita il check verso DEVONthink. Se l'app "
+                "non e' nella lista oppure il check non c'e', resetta il "
+                "TCC con: tccutil reset AppleEvents <bundle-id> e rilancia."
+            )
+        except AdapterError as e:
+            log.warning("dt_data_access_probe_failed", error=str(e))
+
         version: str | None = None
-        if dt_running:
+        if not permission_denied:
             try:
                 version = await self._jxa_inline(
                     "JSON.stringify(Application('DEVONthink').version())"
@@ -147,9 +182,11 @@ class JXAAdapter(DEVONthinkAdapter):
         return HealthStatus(
             dt_running=dt_running,
             dt_version=version,
-            bridge_ready=dt_running,
+            bridge_ready=dt_running and not permission_denied,
             cache_ready=self._cache is not None,
             sidecar_ready=False,
+            permission_denied=permission_denied,
+            recovery_hint=recovery_hint,
         )
 
     async def list_databases(self) -> list[Database]:

@@ -108,8 +108,37 @@ echo "=> Step 2 — Raw JXA: list_databases"
 DB_COUNT="$(osascript -l JavaScript -e 'Application("DEVONthink").databases().length' 2>"${TMP_DIR}/jxa.err" || echo "ERR")"
 
 if [[ "${DB_COUNT}" == "ERR" ]] || ! [[ "${DB_COUNT}" =~ ^[0-9]+$ ]]; then
-    echo "   FAIL: JXA returned non-numeric output: '${DB_COUNT}'" >&2
-    cat "${TMP_DIR}/jxa.err" >&2 || true
+    # Detect the most common cause: AppleEvents permission denied (-1743).
+    # Surface a precise recovery hint instead of dumping the cryptic error.
+    if grep -q -- "-1743" "${TMP_DIR}/jxa.err" 2>/dev/null; then
+        cat >&2 <<'EOF'
+   FAIL: AppleEvents permission denied (-1743).
+
+   The terminal/script needs explicit permission to control DEVONthink.
+   Fix (3 options, in order of brutality):
+
+   1. System Settings -> Privacy & Security -> Automation
+      Find your terminal app (Warp/iTerm/Terminal/Ghostty) -> expand
+      -> enable the DEVONthink toggle.
+
+   2. If your terminal is NOT in the Automation list at all, the TCC
+      cache may be stale. Reset it:
+        tccutil reset AppleEvents <bundle-id>
+      Common bundle IDs:
+        Warp     -> dev.warp.Warp-Stable
+        iTerm    -> com.googlecode.iterm2
+        Terminal -> com.apple.Terminal
+        Ghostty  -> com.mitchellh.ghostty
+      Then re-run: osascript -l JavaScript -e 'Application("DEVONthink").databases().length'
+      macOS will re-prompt with the consent dialog. Click "Allow".
+
+   3. Try a different terminal app that may have a clean TCC slate
+      (Terminal.app is always present on macOS).
+EOF
+    else
+        echo "   FAIL: JXA returned non-numeric output: '${DB_COUNT}'" >&2
+        cat "${TMP_DIR}/jxa.err" >&2 || true
+    fi
     echo "[FAIL] smoke fail (step 2)"
     exit 1
 fi
