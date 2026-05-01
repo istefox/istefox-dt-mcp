@@ -24,6 +24,11 @@ Se DEVONthink non è in esecuzione, l'autouse fixture `dt_running`
 salta l'intero modulo con un messaggio chiaro — niente errori
 fuorvianti.
 
+## Note importanti
+
+- **Latency benchmark richiede `--benchmark-enable`** perché `pyproject.toml` ha `--benchmark-disable` in `addopts` (default sano per non runnare benchmark in unit/contract). Vedi sezione "Come eseguirli" sotto: il comando smoke (6 test) non gira il benchmark, il comando con `--benchmark-enable` gira anche il test latency.
+- **Terminal app**: solo Terminal.app e iTerm2 (e altri terminal Apple-signed) possono triggerare il prompt AppleEvents. Warp/Tabby/Hyper/Alacritty falliscono con `-1743` senza dialog. Vedi sezione Troubleshooting nel README principale.
+
 ## Come eseguirli
 
 Smoke (6 test, uno per tool):

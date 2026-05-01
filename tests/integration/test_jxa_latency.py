@@ -78,6 +78,18 @@ def test_get_record_latency_p95_under_500ms(
     # by pytest-benchmark and not statically importable).
     benchmark.pedantic(_run, rounds=_ROUNDS, iterations=1, warmup_rounds=2)  # type: ignore[attr-defined]
 
+    # When pytest is invoked with `--benchmark-disable` (the default
+    # in pyproject.toml addopts), pedantic still calls _run but
+    # doesn't populate stats. Skip with a clear, actionable message
+    # instead of raising AttributeError on `.stats.stats.mean`.
+    if benchmark.stats is None:  # type: ignore[attr-defined]
+        pytest.skip(
+            "benchmark stats unavailable (pytest invoked with "
+            "--benchmark-disable). Re-run with --benchmark-enable: "
+            "uv run pytest tests/integration -m integration "
+            "--benchmark-enable -v"
+        )
+
     mean_s = benchmark.stats.stats.mean  # type: ignore[attr-defined]
     assert mean_s < _TARGET_MEAN_S, (
         f"get_record mean latency {mean_s * 1000:.1f}ms exceeds "
