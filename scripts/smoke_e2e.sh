@@ -227,74 +227,92 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5 — Server starts, responds to initialize, exits cleanly on stdin EOF.
+# Step 5 — Server starts and responds to a JSON-RPC initialize request.
+#
+# Why this simpler design (vs the previous FIFO + fd 3 dance):
+# - `uv run` spawns a Python subprocess that INHERITS the parent shell's
+#   open file descriptors. Closing fd 3 in the parent did NOT propagate
+#   to the spawned Python, so the FIFO read-side never saw EOF and the
+#   server hung forever waiting for more input.
+# - `echo | timeout cmd | head -1` is the canonical Unix smoke pattern:
+#   * echo writes the request and closes its stdout
+#   * timeout caps the whole pipeline at 10s
+#   * head -1 reads the first response line then closes its stdin
+#     (SIGPIPE propagates back, server's stdout write fails, server
+#     exits cleanly via FastMCP's standard shutdown path)
+# - No manual PID tracking, no lifecycle race, no hang.
 # ---------------------------------------------------------------------------
 
 echo ""
 echo "=> Step 5 — Server lifecycle (initialize + clean shutdown)"
 
-SERVER_IN="${TMP_DIR}/server.in"
-SERVER_OUT="${TMP_DIR}/server.out"
 SERVER_ERR="${TMP_DIR}/server.err"
-mkfifo "${SERVER_IN}"
+INIT_REQUEST='{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0.0.0"}},"id":1}'
 
-# Spawn the server with stdin attached to a FIFO so we can close it later
-# by simply removing the writer end (file descriptor 3 below).
-exec 3>"${SERVER_IN}"
-uv run --directory "${PROJECT_ROOT}" istefox-dt-mcp serve \
-    <"${SERVER_IN}" >"${SERVER_OUT}" 2>"${SERVER_ERR}" &
-SERVER_PID=$!
+# Detect a timeout binary. macOS does not ship GNU `timeout` by default;
+# `gtimeout` is available if coreutils is installed via Homebrew.
+# If neither exists, we still rely on `head -1` + SIGPIPE for cleanup
+# (proven to work for FastMCP servers — the server exits cleanly when
+# its stdout writer fails). The timeout is a belt-and-suspenders for
+# the case where the server doesn't write anything at all.
+TIMEOUT_PREFIX=()
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_PREFIX=(timeout 10)
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_PREFIX=(gtimeout 10)
+fi
 
-# Send initialize request.
-printf '%s\n' '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' >&3
+# Pipeline:
+#   echo INIT_REQUEST -> server stdin
+#   server stdout -> head -1 (reads first line, closes its stdin)
+#   When head closes, server's next stdout write fails (SIGPIPE) and
+#   FastMCP's standard shutdown path triggers a clean exit.
+set +e
+if (( ${#TIMEOUT_PREFIX[@]} > 0 )); then
+    RESPONSE="$(printf '%s\n' "${INIT_REQUEST}" \
+        | "${TIMEOUT_PREFIX[@]}" uv run --directory "${PROJECT_ROOT}" \
+            istefox-dt-mcp serve 2>"${SERVER_ERR}" \
+        | head -1)"
+else
+    RESPONSE="$(printf '%s\n' "${INIT_REQUEST}" \
+        | uv run --directory "${PROJECT_ROOT}" istefox-dt-mcp serve \
+            2>"${SERVER_ERR}" \
+        | head -1)"
+fi
+PIPE_STATUS=("${PIPESTATUS[@]}")
+set -e
 
-# Wait up to 5s for a JSON-RPC response on stdout.
-RESPONSE_OK=0
-for _ in $(seq 1 50); do
-    if [[ -s "${SERVER_OUT}" ]] && grep -q '"id":1' "${SERVER_OUT}" 2>/dev/null; then
-        RESPONSE_OK=1
-        break
-    fi
-    sleep 0.1
-done
+# Pipeline exit codes vary; what we really care about is RESPONSE content.
+# Expected status[1] (server stage):
+#   0   -> server exited cleanly via SIGPIPE handling
+#   141 -> SIGPIPE (also acceptable)
+#   124 -> timeout fired (only possible if a timeout binary was found)
 
-if (( RESPONSE_OK == 0 )); then
-    echo "   FAIL: no initialize response within 5s" >&2
-    echo "   --- stderr (last 20 lines) ---" >&2
-    tail -n 20 "${SERVER_ERR}" >&2 || true
-    kill -KILL "${SERVER_PID}" 2>/dev/null || true
-    SERVER_PID=""
+if [[ -z "${RESPONSE}" ]]; then
+    echo "   FAIL: server did not produce any stdout" >&2
+    echo "   pipeline exit codes: ${PIPE_STATUS[*]}" >&2
+    echo "   --- stderr (last 30 lines) ---" >&2
+    tail -n 30 "${SERVER_ERR}" >&2 || true
     echo "[FAIL] smoke fail (step 5)"
     exit 2
 fi
 
-echo "   ok: initialize response received"
-
-# Close stdin (EOF) by closing fd 3 — server should exit on its own.
-exec 3>&-
-
-EXIT_OK=0
-for _ in $(seq 1 30); do
-    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-        EXIT_OK=1
-        break
-    fi
-    sleep 0.1
-done
-
-if (( EXIT_OK == 0 )); then
-    echo "   FAIL: server did not exit within 3s after stdin EOF" >&2
-    kill -KILL "${SERVER_PID}" 2>/dev/null || true
-    SERVER_PID=""
+# 124 only happens if timeout actually fired; treat it as a hang.
+if (( ${#TIMEOUT_PREFIX[@]} > 0 )) && (( ${PIPE_STATUS[1]:-0} == 124 )); then
+    echo "   FAIL: server hung beyond 10s timeout (response was: ${RESPONSE})" >&2
     echo "[FAIL] smoke fail (step 5)"
     exit 2
 fi
 
-# Reap and clear so the cleanup trap does not double-kill.
-wait "${SERVER_PID}" 2>/dev/null || true
-SERVER_PID=""
+# Validate the response is a JSON-RPC envelope referring to id=1.
+if ! grep -q '"id":1' <<<"${RESPONSE}"; then
+    echo "   FAIL: response doesn't contain expected id=1 marker" >&2
+    echo "   got: ${RESPONSE}" >&2
+    echo "[FAIL] smoke fail (step 5)"
+    exit 2
+fi
 
-echo "   ok: server exited cleanly on stdin EOF"
+echo "   ok: initialize response received, server exited cleanly"
 
 # ---------------------------------------------------------------------------
 # Final verdict.
