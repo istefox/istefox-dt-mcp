@@ -83,6 +83,23 @@ cd istefox-dt-mcp
 uv sync --all-packages
 ```
 
+### macOS Automation permission (obbligatorio)
+
+DEVONthink risponde alle Apple Events solo se l'app che le invia ha
+il permesso esplicito. Al primo `uv run istefox-dt-mcp doctor` con
+DT in esecuzione, macOS mostrerà un dialog "X vuole controllare
+DEVONthink": clicca **OK**.
+
+Se non vedi il dialog (cliccato in passato "Non consentire"):
+
+1. Apri **System Settings → Privacy & Security → Automation**
+2. Trova il terminale o app da cui esegui (Warp, iTerm, Terminal, Claude Desktop)
+3. Abilita il check verso **DEVONthink**
+
+Errore tipico in caso di permesso negato: `PERMISSION_DENIED` con
+codice AppleScript `-1743`. Il connector lo intercetta e suggerisce
+l'app coinvolta nel `recovery_hint`.
+
 ---
 
 ## Quick start

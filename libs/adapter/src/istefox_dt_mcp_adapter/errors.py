@@ -13,6 +13,7 @@ from istefox_dt_mcp_schemas.errors import ErrorCode
 
 __all__ = [
     "AdapterError",
+    "AutomationPermissionError",
     "DTNotRunningError",
     "DTVersionIncompatibleError",
     "DatabaseNotFoundError",
@@ -168,6 +169,31 @@ class ValidationError(AdapterError):
         super().__init__(
             message,
             recovery_hint="Input non valido. Vedi il dettaglio dell'errore.",
+            audit_id=audit_id,
+        )
+
+
+class AutomationPermissionError(AdapterError):
+    """macOS denied Apple Events from caller process to DEVONthink.
+
+    Triggered by AppleScript error -1743 ("not authorized to send
+    Apple events"). The caller (Terminal, iTerm, Warp, Claude Desktop,
+    ...) needs to be enabled in
+    System Settings -> Privacy & Security -> Automation -> DEVONthink.
+    """
+
+    code = ErrorCode.PERMISSION_DENIED
+
+    def __init__(self, caller_hint: str = "", audit_id: UUID | None = None) -> None:
+        target = caller_hint or "l'app da cui hai lanciato il comando"
+        super().__init__(
+            "Apple Events to DEVONthink not authorized (-1743)",
+            recovery_hint=(
+                "Apri System Settings → Privacy & Security → Automation, "
+                f"trova {target} e abilita il check verso DEVONthink. "
+                "Se non vedi la voce, esegui ancora il comando una volta — "
+                "macOS dovrebbe mostrare il dialog di consenso."
+            ),
             audit_id=audit_id,
         )
 
