@@ -14,6 +14,30 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.12] — 2026-05-01 — Fix: bundle .mcpb installa il server package
+
+### Fixed
+- **Bundle .mcpb v0.0.11 era non funzionante**: il `pyproject.toml`
+  workspace root non dichiarava `istefox-dt-mcp-server` come
+  dependency, quindi `uv sync` (eseguito dall'host MCPB) non
+  installava il package nel venv. Risultato: `ImportError: No module
+  named 'istefox_dt_mcp_server'` al lancio.
+- Aggiunto `dependencies = ["istefox-dt-mcp-server"]` + relativo
+  `[tool.uv.sources]` workspace mapping in `pyproject.toml` root.
+  Pull transitivo di adapter, schemas, sidecar via path-deps.
+- Bug scoperto via preflight test: extract `.mcpb` in dir temp →
+  `uv sync` → `uv run python bundle_main.py --help`. Verifica che
+  ora il workflow MCPB risolve i moduli correttamente.
+
+### Verified
+- Preflight bundle.mcpb da dir estratta: `uv sync` + bundle_main
+  `--help` mostrano i 6 sub-command (`serve`, `doctor`, `reindex`,
+  `reconcile`, `undo`, `watch`).
+- 132 test unit pass (invariati).
+- Server bumped a v0.0.12. Manifest version 0.0.12.
+
+---
+
 ## [0.0.11] — 2026-05-01 — W11: .mcpb desktop extension packaging
 
 ### Added
