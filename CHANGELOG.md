@@ -7,9 +7,50 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ### Added
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
-- (W11) Packaging `pipx` + `.mcpb`
 - (post-MVP) Multi-step undo (chain audit_ids)
 - (post-MVP) ADR-008 model selection benchmark MiniLM vs bge-m3
+- (post-MVP) Integrazione `user_config` MCPB → env vars del server
+  (RAG_ENABLED, RAG_MODEL, PREVIEW_TTL_S)
+
+---
+
+## [0.0.11] — 2026-05-01 — W11: .mcpb desktop extension packaging
+
+### Added
+- **Bundle `.mcpb`** per installazione one-click in Claude Desktop:
+  - `manifest.json` (manifest_version 0.4) con `server.type=uv` e
+    `entry_point=bundle_main.py`. Compatibility: macOS, Python 3.12+.
+  - `bundle_main.py` — wrapper standalone che invoca `cli` defaultando
+    a `serve` se nessun sub-command è passato.
+  - `scripts/build_mcpb.sh` — build script bash (zero deps oltre
+    `bash`/`zip`/`unzip`): assembla staging dir, esclude
+    `__pycache__`/`.DS_Store`/caches, produce `dist/istefox-dt-mcp-<v>.mcpb`
+    (~270 KB, 78 file).
+  - Bundle layout: il workspace monorepo intero viene zippato così
+    che il host esegue `uv sync` su `pyproject.toml` workspace e
+    risolve i path-deps locali (`apps/`, `libs/`).
+- **README sezione Claude Desktop** riscritta con due opzioni:
+  - Opzione A — `.mcpb` (consigliata, no setup utente)
+  - Opzione B — config JSON manuale (workflow di sviluppo)
+- **Doc TCC permission**: la prima invocazione di un tool DT mostra
+  il dialog macOS Automation per Claude → DEVONthink. Risolve il
+  blocker della sessione iniziale (Warp/Terminal stuck).
+
+### Changed
+- Server bumped a v0.0.11.
+- Manifest version coincide con `SERVER_VERSION`.
+
+### Verified
+- Build script produce bundle valido (78 file, 268 KB)
+- `uv run python bundle_main.py --help` mostra tutti i sub-command
+- 132 test unit ancora pass; mypy strict + ruff + black clean
+
+### Limitations (consapevoli)
+- `user_config` MCPB non wired alle env vars `ISTEFOX_*` del server
+  (richiede E2E test con Claude Desktop per validare semantica per
+  `server.type=uv`). Workaround: env vars settate manualmente.
+- Nessun code signing del bundle (single-user personal use; firma
+  richiede Apple Developer ID).
 
 ---
 
