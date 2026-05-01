@@ -234,15 +234,21 @@ class FileDocumentOutput(Envelope[FileDocumentResult]):
 
 
 # ----------------------------------------------------------------------
-# bulk_apply (post-MVP — placeholder schema, implementation post-W7)
+# bulk_apply (v0.0.8 — batch many small ops with preview-then-apply)
 # ----------------------------------------------------------------------
 
 
 class BulkApplyOperation(StrictModel):
-    """One operation inside a bulk apply batch."""
+    """One operation inside a bulk apply batch.
+
+    Supported `op` values:
+    - `add_tag` — payload: `{"tag": "<name>"}`
+    - `remove_tag` — payload: `{"tag": "<name>"}`
+    - `move` — payload: `{"destination": "<group/path>"}`
+    """
 
     record_uuid: str
-    op: str = Field(..., description="add_tag | remove_tag | move | rename")
+    op: str = Field(..., description="add_tag | remove_tag | move")
     payload: dict[str, str] = Field(
         default_factory=dict,
         description=(
@@ -253,13 +259,31 @@ class BulkApplyOperation(StrictModel):
 
 
 class BulkApplyInput(StrictModel):
-    """Apply many small ops atomically. Dry-run by default.
+    """Apply many small ops in one call. Dry-run by default.
 
-    Same preview-then-apply contract as `file_document`. Either all
-    ops apply or none — failures roll back the whole batch and the
-    audit log records the failure point.
+    Same preview-then-apply contract as `file_document`: call once
+    with `dry_run=true` to inspect the planned operations and receive
+    a `preview_token` (audit_id), then call again with `dry_run=false`
+    + `confirm_token=<previous preview_token>` to commit.
 
-    NOTE: schema only in v1. Implementation post-W7.
+    Failure semantics: DEVONthink has no transactions, so we cannot
+    automatically roll back already-applied ops. Default is
+    `stop_on_first_error=true` — the batch halts at the first failure
+    and `failed_index` reports the offending op. The audit log records
+    the partial state; the user can selectively undo applied ops by
+    audit_id.
+
+    Limits: max 500 ops per call.
+
+    When to use:
+    - Tag many records with the same tag.
+    - Move a curated set of records to a single destination group.
+    - Combine a few tag/move ops on the same set of records.
+
+    Don't use for:
+    - Single-record tagging/move — use `apply_tag`/`move_record` flows
+      via `file_document` for richer audit (before_state).
+    - Auto-classification — use `file_document` (calls DT classifier).
     """
 
     operations: list[BulkApplyOperation] = Field(..., min_length=1, max_length=500)
@@ -268,11 +292,23 @@ class BulkApplyInput(StrictModel):
     stop_on_first_error: bool = True
 
 
+class BulkOpOutcome(StrictModel):
+    """Result of a single op inside a bulk_apply batch."""
+
+    index: int
+    record_uuid: str
+    op: str
+    status: str = Field(..., description="planned | applied | skipped | failed")
+    error_code: str | None = None
+    error_message: str | None = None
+
+
 class BulkApplyResult(StrictModel):
     operations_total: int
     operations_applied: int
     failed_index: int | None = None
     preview_token: str | None = None
+    outcomes: list[BulkOpOutcome] = Field(default_factory=list)
 
 
 class BulkApplyOutput(Envelope[BulkApplyResult]):
