@@ -12,6 +12,46 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.28] — 2026-05-01 — Smoke step 5 hang fix (FIFO -> SIGPIPE pattern)
+
+Discovery dal terzo run smoke (Stefano, 2026-05-01 22:25, dopo
+v0.0.27): Step 1-4 verdi, Step 5 (server lifecycle) hang oltre 4
+minuti, mai esce.
+
+Root cause: il design originale di Step 5 usava FIFO + fd 3 per
+gestire stdin del server. `uv run` spawn un Python subprocess che
+EREDITA i file descriptor del parent shell. Anche dopo
+`exec 3>&-` nel parent, il Python child manteneva fd 3 aperto
+(write-side della FIFO) -> read-side della FIFO non riceveva mai
+EOF -> server bloccato in attesa di altro input -> il loop
+`kill -0` poll-30-iter timeout, ma probabilmente anche il `wait`
+finale dopo era stuck per qualche path che non avevamo previsto.
+
+Fix: rewrite di Step 5 con il pattern Unix canonico:
+
+    echo INIT_REQUEST | timeout 10 server | head -1
+
+- echo invia il request e chiude stdin
+- head -1 legge la prima linea di response e chiude stdin del
+  prossimo stage
+- server riceve SIGPIPE su prossimo write a stdout -> exit clean
+  via FastMCP shutdown path
+- timeout (se disponibile) caps tutto a 10s come safety net
+
+macOS portability: detection di `timeout`/`gtimeout` con fallback
+a SIGPIPE-only (provato a funzionare con FastMCP). Rimossi tutti
+i `mkfifo`, `exec 3>`, manual PID polling, `kill -0` loop.
+
+Verificato standalone: il pipe pattern produce JSON-RPC initialize
+response in <1s, exit code 0, server termina clean.
+
+Verifiche:
+- 163 unit + contract pass
+- bash -n smoke_e2e.sh OK
+- Standalone test: pipeline produce response valida
+
+---
+
 ## [0.0.27] — 2026-05-01 — Integration test fixes round 2: get_record + smoke step 3
 
 Discovery dal secondo run E2E (Stefano, 2026-05-01 22:13, Terminal.app):
