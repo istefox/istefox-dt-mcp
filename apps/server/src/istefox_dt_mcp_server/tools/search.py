@@ -16,6 +16,7 @@ from ._common import safe_call
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+    from istefox_dt_mcp_schemas.common import SearchResult
 
     from ..deps import Deps
 
@@ -35,7 +36,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
 
         kinds = [k.value for k in input.kinds] if input.kinds else None
 
-        async def op():
+        async def op() -> list[SearchResult]:
             return await deps.adapter.search(
                 input.query,
                 databases=input.databases,

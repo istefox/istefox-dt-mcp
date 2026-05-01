@@ -225,9 +225,11 @@ class JXAAdapter(DEVONthinkAdapter):
             and raw.get("error") == ErrorCode.DATABASE_NOT_FOUND.value
         ):
             raise DatabaseNotFoundError(dest_group_path)
-        location_after = (
-            raw.get("location") if isinstance(raw, dict) else dest_group_path
-        )
+        location_after: str = dest_group_path
+        if isinstance(raw, dict):
+            value = raw.get("location")
+            if isinstance(value, str):
+                location_after = value
         if self._cache:
             self._cache.invalidate_prefix(f"record:{uuid}")
         return MoveResult(
