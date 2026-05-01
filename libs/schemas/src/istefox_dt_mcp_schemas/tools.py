@@ -170,7 +170,7 @@ class AskDatabaseOutput(Envelope[AskDatabaseAnswer]):
 
 
 # ----------------------------------------------------------------------
-# file_document (post-W6 — write tool with dry_run)
+# file_document (W7 — write tool with dry_run)
 # ----------------------------------------------------------------------
 
 
@@ -195,9 +195,13 @@ class FileDocumentInput(StrictModel):
     Safety:
     - `dry_run` defaults to true. Always preview before applying.
     - Audit log records before-state for selective undo.
+    - To apply, run twice: first with dry_run=true to get a
+      preview_token in the audit_id, then with dry_run=false +
+      confirm_token=<the audit_id> to commit.
 
     Examples:
     - {"record_uuid": "ABCD-...", "dry_run": true}
+    - {"record_uuid": "ABCD-...", "dry_run": false, "confirm_token": "..."}
     """
 
     record_uuid: str
@@ -205,6 +209,13 @@ class FileDocumentInput(StrictModel):
     auto_classify: bool = True
     auto_tag: bool = True
     destination_hint: str | None = None
+    confirm_token: str | None = Field(
+        default=None,
+        description=(
+            "audit_id of the previous dry_run preview. Required when "
+            "dry_run=false and the server enforces preview-then-apply."
+        ),
+    )
 
 
 class FileDocumentResult(StrictModel):
@@ -212,7 +223,100 @@ class FileDocumentResult(StrictModel):
     preview: FileDocumentPreview
     would_apply: bool
     applied: bool = False
+    preview_token: str | None = Field(
+        default=None,
+        description="audit_id of this dry_run; pass back as confirm_token to apply",
+    )
 
 
 class FileDocumentOutput(Envelope[FileDocumentResult]):
+    pass
+
+
+# ----------------------------------------------------------------------
+# bulk_apply (post-MVP — placeholder schema, implementation post-W7)
+# ----------------------------------------------------------------------
+
+
+class BulkApplyOperation(StrictModel):
+    """One operation inside a bulk apply batch."""
+
+    record_uuid: str
+    op: str = Field(..., description="add_tag | remove_tag | move | rename")
+    payload: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Op-specific args (e.g. {'tag': 'x'} for add_tag, "
+            "{'destination': 'A/B'} for move)"
+        ),
+    )
+
+
+class BulkApplyInput(StrictModel):
+    """Apply many small ops atomically. Dry-run by default.
+
+    Same preview-then-apply contract as `file_document`. Either all
+    ops apply or none — failures roll back the whole batch and the
+    audit log records the failure point.
+
+    NOTE: schema only in v1. Implementation post-W7.
+    """
+
+    operations: list[BulkApplyOperation] = Field(..., min_length=1, max_length=500)
+    dry_run: bool = True
+    confirm_token: str | None = None
+    stop_on_first_error: bool = True
+
+
+class BulkApplyResult(StrictModel):
+    operations_total: int
+    operations_applied: int
+    failed_index: int | None = None
+    preview_token: str | None = None
+
+
+class BulkApplyOutput(Envelope[BulkApplyResult]):
+    pass
+
+
+# ----------------------------------------------------------------------
+# undo (W7+ — selective undo of a previously applied write op)
+# ----------------------------------------------------------------------
+
+
+class UndoInput(StrictModel):
+    """Undo a previously applied write op given its audit_id.
+
+    The audit log must contain a `before_state` for the target entry
+    (set automatically by write tools that opt-in to undo support).
+    Read ops cannot be undone.
+
+    Safety:
+    - `dry_run` defaults to true.
+    - Undo is idempotent only if the target record hasn't been
+      modified by other ops since the original write.
+
+    NOTE: schema only in v1. Implementation post-W7.
+    """
+
+    audit_id: str
+    dry_run: bool = True
+    confirm_token: str | None = None
+
+
+class UndoResult(StrictModel):
+    audit_id: str
+    target_record_uuid: str
+    reverted: bool
+    preview_token: str | None = None
+    drift_detected: bool = Field(
+        default=False,
+        description=(
+            "True if the record state changed since the original write — "
+            "undo may not restore the exact prior state."
+        ),
+    )
+
+
+class UndoOutput(Envelope[UndoResult]):
     pass

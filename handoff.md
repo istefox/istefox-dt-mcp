@@ -79,6 +79,29 @@
 
 ---
 
+## W4 status (2026-05-01)
+
+W4 chiuso in giornata. Aggiunto:
+- **Logging refinement**: `safe_call` binda `request_id+tool+audit_id`
+  a `structlog.contextvars`; nuovo evento `tool_call_started` con
+  input redatto (query/question/snippet/answer mascherati)
+- **Schemas write tools** (impl W7+): `FileDocument.confirm_token`,
+  `BulkApply` schema, `Undo` schema con `drift_detected`
+- **RAGProvider ABC** + `NoopRAGProvider` registrato come default
+  in `Deps` — permette di scrivere già adesso codice che usa il RAG
+  layer (ritornerà liste vuote finché W5-6 non sostituisce con
+  `ChromaRAGProvider`)
+
+68 test pass, mypy strict + ruff verdi. CHANGELOG v0.0.4 pubblicato.
+
+**Prossimo (W5-W6)**: RAG sidecar same-process — il salto di valore
+vero. Plan: `ChromaRAGProvider`, embedding pipeline `bge-m3` lazy
+load, smart rule DT4 → webhook, hybrid search in `search` e
+`ask_database`. Spike preventivo ChromaDB stress-test 50K record
+prima dell'implementazione (vedi ADR-003 §"Spike preventivo").
+
+---
+
 ## W3 status (2026-05-01)
 
 W3 **chiuso** in giornata. Aggiunto:

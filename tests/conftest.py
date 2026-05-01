@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 from istefox_dt_mcp_adapter.cache import SQLiteCache
 from istefox_dt_mcp_adapter.contract import DEVONthinkAdapter
+from istefox_dt_mcp_adapter.rag import NoopRAGProvider
 from istefox_dt_mcp_server.audit import AuditLog
 from istefox_dt_mcp_server.deps import Deps
 from istefox_dt_mcp_server.i18n import Translator
@@ -61,4 +62,5 @@ def deps(
         audit=audit_log,
         translator=translator,
         cache=cache,
+        rag=NoopRAGProvider(),
     )
