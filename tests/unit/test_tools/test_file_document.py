@@ -256,8 +256,24 @@ async def test_apply_with_expired_token_is_rejected(
 async def test_audit_log_persists_after_state_on_apply(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
-    """W10: after_state should hold the post-apply snapshot."""
-    mock_adapter.get_record.return_value = _record(location="/Inbox", tags=["alpha"])
+    """W10/v0.0.20: after_state holds the REFETCHED record state.
+
+    file_document refetches the record after apply (instead of
+    reconstructing from input), so what's persisted matches what
+    `undo` will see on subsequent get_record calls — even if DT
+    normalizes the location string differently from destination_hint.
+    """
+    # First call (initial snapshot for before_state): record at /Inbox
+    # Second call (refetch after apply): DT reports the post-move
+    # location relative to the database — note "/X/" not "/Business/X"
+    mock_adapter.get_record.side_effect = [
+        _record(location="/Inbox", tags=["alpha"]),  # initial snapshot
+        _record(location="/X/", tags=["alpha", "X"]),  # post-apply refetch
+        # Plus a 3rd call for the second invocation's initial snapshot
+        # (preview phase of the apply call). Use last value as fallback.
+        _record(location="/X/", tags=["alpha", "X"]),
+        _record(location="/X/", tags=["alpha", "X"]),
+    ]
     mock_adapter.classify_record.return_value = [
         ClassifySuggestion(location="/Business/X", score=0.9)
     ]
@@ -283,8 +299,9 @@ async def test_audit_log_persists_after_state_on_apply(
     entry = deps.audit.get(apply.audit_id)
     assert entry is not None
     assert entry.after_state is not None
-    assert entry.after_state["location"] == "/Business/X"
-    # Tags after = union of before-tags and added — sorted
+    # Now stores DT's actual location string (from refetch), not the
+    # destination_hint or preview value
+    assert entry.after_state["location"] == "/X/"
     assert entry.after_state["tags"] == ["X", "alpha"]
 
 
