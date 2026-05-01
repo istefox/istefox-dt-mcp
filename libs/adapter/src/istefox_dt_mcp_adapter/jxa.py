@@ -175,6 +175,23 @@ class JXAAdapter(DEVONthinkAdapter):
             raise RecordNotFoundError(uuid)
         return Record.model_validate(raw)
 
+    async def get_record_text(self, uuid: str, *, max_chars: int = 2000) -> str:
+        cache_key = f"record_text:{uuid}:max={max_chars}"
+        if self._cache and (cached := self._cache.get(cache_key)):
+            return str(cached)
+
+        raw = await self._run_script("get_record_text.js", uuid, str(max_chars))
+        if (
+            isinstance(raw, dict)
+            and raw.get("error") == ErrorCode.RECORD_NOT_FOUND.value
+        ):
+            raise RecordNotFoundError(uuid)
+
+        text = str(raw.get("text", "")) if isinstance(raw, dict) else ""
+        if self._cache:
+            self._cache.set(cache_key, text, ttl_s=300.0)
+        return text
+
     async def search(
         self,
         query: str,

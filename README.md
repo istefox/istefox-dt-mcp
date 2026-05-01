@@ -17,7 +17,7 @@ Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dict
 | `list_databases` | read | ✅ implementato | W1-W2 |
 | `search` | read (BM25) | ✅ implementato | W1-W2 |
 | `find_related` | read (See Also/Compare) | ✅ implementato | W1-W2 |
-| `ask_database` | read (RAG Q&A) | ⏳ schema pronto | W4-W6 |
+| `ask_database` | read (BM25 retrieval-only; vector W5-6) | ✅ implementato | W3 |
 | `file_document` | write con `dry_run` | ⏳ schema pronto | W7 |
 
 Esclusi da MVP (post-W7): `summarize_topic`, `bulk_apply`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
@@ -109,11 +109,14 @@ l'app coinvolta nel `recovery_hint`.
 uv run ruff check .
 uv run black --check .
 
-# Test unit (43 test, ~1s)
+# Test unit (51 test, ~1s)
 uv run pytest tests/unit -v
 
 # Test con coverage
 uv run pytest tests/unit --cov=apps --cov=libs --cov-report=term
+
+# Micro-benchmark (opt-in: cache + bridge overhead)
+uv run pytest tests/benchmark --benchmark-enable --benchmark-only
 
 # CLI
 uv run istefox-dt-mcp --help
