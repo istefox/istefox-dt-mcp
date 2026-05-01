@@ -15,7 +15,7 @@
     "type": "git",
     "url": "https://github.com/istefox/istefox-dt-mcp"
   },
-  "license": "Proprietary",
+  "license": "MIT",
   "keywords": [
     "devonthink",
     "knowledge-management",

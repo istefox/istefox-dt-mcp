@@ -1,8 +1,17 @@
 # istefox-dt-mcp
 
-MCP server per DEVONthink 4 — outcome-oriented tools, RAG locale, production-grade. Stack Python 3.12 + FastMCP + ChromaDB + uv.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
+[![Status: Pre-release](https://img.shields.io/badge/status-pre--release-orange.svg)](#stato)
 
-> **Stato**: W1-W2 in corso. Foundations + 3 tool read-only operativi. Vedi [`handoff.md`](handoff.md) per lo stato corrente, [`CLAUDE.md`](CLAUDE.md) per i vincoli, [`docs/adr/`](docs/adr/) per le decisioni consolidate.
+MCP server per DEVONthink 4 — outcome-oriented tools, RAG locale opzionale, privacy-first. Stack Python 3.12 + FastMCP + ChromaDB + uv.
+
+> **⚠️ Pre-release (0.0.x)**: l'API dei tool è considerata stabile; possono esserci breaking change minori prima di **0.1.0** (target metà maggio 2026). RAG vector è opt-in experimental. Vedi [`handoff.md`](handoff.md) per lo stato corrente, [`CLAUDE.md`](CLAUDE.md) per i vincoli, [`docs/adr/`](docs/adr/) per le decisioni consolidate.
+
+## Stato
+
+**MVP completo + estensioni W8-W11**: 6 tool MCP operativi end-to-end, validati in Claude Desktop con dati reali (v0.0.20). 137 test unit verdi. Bundle `.mcpb` distribuibile. Audit log + undo selettivo funzionanti.
 
 ---
 
@@ -261,4 +270,6 @@ disponibili.
 
 ## Licenza
 
-Proprietary © Stefano Ferri. Tutti i diritti riservati.
+[MIT License](LICENSE) © 2026 Stefano Ferri.
+
+Puoi usare, modificare e ridistribuire il codice (anche commercialmente) mantenendo il copyright notice. Vedi [`LICENSE`](LICENSE) per il testo completo.
