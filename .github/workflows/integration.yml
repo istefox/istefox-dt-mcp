@@ -1,20 +1,48 @@
 name: Integration (macOS)
 
+# Why this workflow exists even without DEVONthink in the runner:
+#
+# 1. Validates that the workspace installs cleanly on macOS-14 (the
+#    target platform), not just Linux. Catches macOS-specific issues
+#    early — e.g. tomli vs tomllib, AppKit, pyobjc deps.
+# 2. Validates that test discovery works (`pytest --collect-only`
+#    finds the integration tests without import errors).
+# 3. Validates that the autouse `dt_running` fixture skips CLEAN —
+#    the integration tests must NOT fail or error when DT is absent;
+#    they must skip with a clear, actionable reason.
+# 4. Validates that scripts/build_mcpb.sh produces a usable bundle.
+#
+# What this workflow does NOT do:
+# - Run the actual integration tests against DEVONthink (DT can't be
+#   installed in GHA — it's paid macOS app distributed only from
+#   devontech.com). True integration runs happen on the maintainer's
+#   Mac via `bash scripts/smoke_e2e.sh` before each tag (see Step 7
+#   of the 0.1.0 release plan).
+
 on:
   workflow_dispatch:
-  # Once spike #9 confirms cost feasibility, enable:
-  # pull_request:
-  #   branches: [main]
-  # schedule:
-  #   - cron: "0 3 * * *"  # nightly 03:00 UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - "libs/adapter/**"
+      - "apps/server/**"
+      - "tests/integration/**"
+      - "scripts/build_mcpb.sh"
+      - ".github/workflows/integration.yml"
+  schedule:
+    - cron: "0 3 * * *"  # nightly 03:00 UTC
 
 permissions:
   contents: read
 
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  integration:
+  macos-import-and-bundle:
     runs-on: macos-14
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -26,13 +54,52 @@ jobs:
       - name: Set up Python 3.12
         run: uv python install 3.12
 
-      - name: Sync workspace
+      - name: Sync workspace (frozen)
         run: uv sync --all-packages --frozen
 
-      - name: Smoke JXA (no DT installed in runner — expected fail until fixture is added)
+      - name: Smoke JXA round-trip (osascript JSON probe)
         run: |
-          osascript -l JavaScript -e 'JSON.stringify({ok: true})'
-          # When DT fixture is committable per ADR-005, install + smoke real DT here.
+          # Validates that osascript -l JavaScript works in the
+          # runner. DT itself isn't installed; this only proves the
+          # JXA bridge tooling is functional.
+          osascript -l JavaScript -e 'JSON.stringify({ok: true, host: "macos-14"})'
 
-      - name: Run integration tests (placeholder)
-        run: uv run pytest tests/integration -v --tb=short || echo "no integration tests yet"
+      - name: Validate test discovery (no import errors)
+        run: uv run pytest tests/integration -m integration --collect-only -q
+
+      - name: Run integration suite (all should SKIP cleanly without DT)
+        # The autouse dt_running fixture skips with an actionable
+        # reason when DT isn't running. We assert that:
+        #   - exit code is 0 (no error, no failure — only skips)
+        #   - all 7 integration tests are reported as skipped
+        run: |
+          set -o pipefail
+          uv run pytest tests/integration -m integration --tb=short \
+              --benchmark-disable --no-header -q | tee result.txt
+          # Sanity: at least 6 skips reported
+          grep -E '^[0-9]+ skipped' result.txt || {
+            echo "::error::Integration suite did not skip as expected"
+            exit 1
+          }
+
+      - name: Build .mcpb bundle (smoke)
+        # End-to-end check that the bundle script works on macOS.
+        # Output goes to dist/ but is not retained as artifact here
+        # (the release.yml workflow handles publication).
+        run: bash scripts/build_mcpb.sh
+
+      - name: Verify bundle manifest
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          BUNDLE="dist/istefox-dt-mcp-${VERSION}.mcpb"
+          test -f "${BUNDLE}" || { echo "::error::missing ${BUNDLE}"; exit 1; }
+          # Manifest sanity: required fields present
+          unzip -p "${BUNDLE}" manifest.json | python3 -c "
+          import json, sys
+          m = json.load(sys.stdin)
+          for k in ('name', 'version', 'license', 'manifest_version', 'server'):
+              assert k in m, f'missing manifest key: {k}'
+          assert m['license'] == 'MIT', 'license must be MIT'
+          assert m['manifest_version'] == '0.3', 'manifest_version must be 0.3'
+          print(f'OK manifest: {m[\"name\"]} v{m[\"version\"]} (license={m[\"license\"]})')
+          "

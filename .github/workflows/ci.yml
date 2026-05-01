@@ -40,6 +40,9 @@ jobs:
       - name: Run unit tests
         run: uv run pytest tests/unit -v --tb=short
 
+      - name: Run contract tests (VCR-style replay against captured JXA outputs)
+        run: uv run pytest tests/contract -v --tb=short -m contract
+
   mypy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
