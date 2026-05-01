@@ -14,6 +14,44 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.17] — 2026-05-01 — Fix: script JXA write defensive (no più JXA_ERROR opaco)
+
+### Fixed
+- **`get_record.js`, `apply_tag.js`, `remove_tag.js`, `move_record.js`**
+  non erano defensivi: chiamavano `DT.getRecordWithUuid(uuid)`
+  direttamente. Quando il UUID non resolve (record cancellato, DB
+  chiuso, UUID inventato dal LLM, …) lo script crasha →
+  `osascript exit 1` → il caller riceve un `JXA_ERROR` opaco con
+  messaggio "Errore interno del bridge JXA". Diagnosi
+  difficile per l'utente.
+- Fix consolidato: tutti gli script ora wrappano `getRecordWithUuid`
+  in `safe()` (stesso pattern già usato da `find_related.js`,
+  `search_bm25.js`, `classify.js`). Risultato strutturato:
+  `{"error": "RECORD_NOT_FOUND"}` invece di crash.
+- Anche le altre property accessor (`record.tags()`,
+  `destGroup.location()`, ecc.) e le `record.tags = updated`
+  assignments sono ora wrapped in try/catch — se DT lancia, la
+  chiamata ritorna un errore strutturato invece di crashare.
+- Verifica diretta: tutti e 4 gli script ora ritornano
+  `{"error":"RECORD_NOT_FOUND"}` su UUID inesistente (testato
+  con `osascript -l JavaScript script.js FAKE-UUID`).
+
+### Discovery
+Il bug è emerso durante l'E2E test del `file_document` in
+Claude Desktop con un UUID placeholder che non esisteva in DT.
+Il tool ritornava `JXA_ERROR` invece di `RECORD_NOT_FOUND`,
+causando diagnosi confusa (Claude ha suggerito problemi di TCC
+permission, mentre era semplicemente un UUID inventato).
+
+### Verified
+- 133 test unit pass invariati
+- mypy strict + ruff + black puliti
+- Test JXA diretto con UUID inesistente → `RECORD_NOT_FOUND` su
+  tutti e 4 gli script
+- Server bumped a v0.0.17
+
+---
+
 ## [0.0.16] — 2026-05-01 — Fix: bug raccolti dall'E2E v0.0.15
 
 Tre bug raccolti durante il test E2E in Claude Desktop. Tutti
