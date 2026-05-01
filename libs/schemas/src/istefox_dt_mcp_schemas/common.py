@@ -130,6 +130,14 @@ class HealthStatus(StrictModel):
     sidecar_ready: bool
 
 
+class ClassifySuggestion(StrictModel):
+    """One destination group suggested by DT4 native classifier."""
+
+    location: str
+    score: float | None = None
+    database: str | None = None
+
+
 class Envelope[T](StrictModel):
     """Standard envelope for tool outputs.
 

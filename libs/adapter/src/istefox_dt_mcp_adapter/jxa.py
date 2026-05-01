@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 from istefox_dt_mcp_schemas.common import (
+    ClassifySuggestion,
     Database,
     HealthStatus,
     MoveResult,
@@ -256,6 +257,22 @@ class JXAAdapter(DEVONthinkAdapter):
             )
         return results
 
+    async def classify_record(
+        self,
+        uuid: str,
+        *,
+        top_n: int = 3,
+    ) -> list[ClassifySuggestion]:
+        raw = await self._run_script("classify.js", uuid, str(top_n))
+        if (
+            isinstance(raw, dict)
+            and raw.get("error") == ErrorCode.RECORD_NOT_FOUND.value
+        ):
+            raise RecordNotFoundError(uuid)
+        if not isinstance(raw, list):
+            return []
+        return [ClassifySuggestion.model_validate(s) for s in raw]
+
     async def apply_tag(
         self,
         uuid: str,
@@ -281,6 +298,40 @@ class JXAAdapter(DEVONthinkAdapter):
                 tags_after=tags_after,
             )
         await self._run_script("apply_tag.js", uuid, tag)
+        if self._cache:
+            self._cache.invalidate_prefix(f"record:{uuid}")
+        return TagResult(
+            uuid=uuid,
+            outcome=WriteOutcome.APPLIED,
+            tags_before=tags_before,
+            tags_after=tags_after,
+        )
+
+    async def remove_tag(
+        self,
+        uuid: str,
+        tag: str,
+        *,
+        dry_run: bool = True,
+    ) -> TagResult:
+        record = await self.get_record(uuid)
+        tags_before = list(record.tags)
+        if tag not in tags_before:
+            return TagResult(
+                uuid=uuid,
+                outcome=WriteOutcome.NOOP,
+                tags_before=tags_before,
+                tags_after=tags_before,
+            )
+        tags_after = [t for t in tags_before if t != tag]
+        if dry_run:
+            return TagResult(
+                uuid=uuid,
+                outcome=WriteOutcome.PREVIEWED,
+                tags_before=tags_before,
+                tags_after=tags_after,
+            )
+        await self._run_script("remove_tag.js", uuid, tag)
         if self._cache:
             self._cache.invalidate_prefix(f"record:{uuid}")
         return TagResult(
