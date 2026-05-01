@@ -1,8 +1,8 @@
 {
-  "manifest_version": "0.4",
+  "manifest_version": "0.3",
   "name": "istefox-dt-mcp",
   "display_name": "DEVONthink MCP (istefox)",
-  "version": "0.0.12",
+  "version": "0.0.15",
   "description": "MCP server for DEVONthink 4 — outcome-oriented tools, RAG-augmented, privacy-first.",
   "long_description": "Connettore MCP best-in-class per DEVONthink 4. Sei tool MCP operativi end-to-end: list_databases, search (BM25 + vector + hybrid RRF), find_related, ask_database (vector + BM25 fallback), file_document e bulk_apply (entrambi preview-then-apply con audit log e undo selettivo). RAG locale opzionale via ChromaDB embedded. Tutti i dati restano sulla macchina: nessuna telemetry, embedding generati localmente, audit log SQLite append-only.",
   "author": {
@@ -24,13 +24,21 @@
     "italian"
   ],
   "server": {
-    "type": "uv",
-    "entry_point": "bundle_main.py"
+    "type": "python",
+    "entry_point": "bundle_main.py",
+    "mcp_config": {
+      "command": "/opt/homebrew/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "python",
+        "${__dirname}/bundle_main.py",
+        "serve"
+      ]
+    }
   },
   "compatibility": {
-    "platforms": ["darwin"],
-    "runtimes": {
-      "python": ">=3.12,<4.0"
-    }
+    "platforms": ["darwin"]
   }
 }
