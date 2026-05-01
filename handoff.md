@@ -79,6 +79,36 @@
 
 ---
 
+## W5 status (2026-05-01)
+
+W5 chiuso in giornata. Aggiunto:
+- **`ChromaRAGProvider`** (apps/sidecar): same-process ADR-003, lazy
+  load model + client, asyncio.Lock su write
+- **Config-driven RAG**: `ISTEFOX_RAG_ENABLED=1` + opzionale
+  `ISTEFOX_RAG_MODEL=...`. Default NoopRAGProvider (no overhead)
+- **`reindex` CLI**: walk DT (nuovo `enumerate_records` + script
+  JXA), batch-index in vector store. One-shot manuale; smart rule
+  sync W6.
+- **Hybrid search RRF** in tool `search`: bm25/semantic/hybrid mode
+  via Reciprocal Rank Fusion (k=60)
+- **`ask_database` vector-first**: retrieval semantico se RAG attivo,
+  fallback BM25 trasparente
+
+84 test pass, mypy strict + ruff + black clean. CHANGELOG v0.0.5.
+
+**Per testare end-to-end con dati reali**:
+```bash
+export ISTEFOX_RAG_ENABLED=1
+uv run istefox-dt-mcp reindex Business --limit 50
+uv run istefox-dt-mcp doctor   # vede indexed_count > 0
+```
+
+**Prossimo (W6)**: smart rule DT4 → webhook locale per sync
+incrementale + reconciliation notturna. Anche ADR-008 (model
+selection: MiniLM vs bge-m3) con benchmark su corpus reale.
+
+---
+
 ## ChromaDB stress spike — ADR-003 PASS (2026-05-01)
 
 Spike preventivo richiesto da ADR-003 §"Spike preventivo" eseguito

@@ -15,9 +15,9 @@ Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dict
 | Tool | Tipo | Stato | Settimana |
 |---|---|---|---|
 | `list_databases` | read | ✅ implementato | W1-W2 |
-| `search` | read (BM25) | ✅ implementato | W1-W2 |
+| `search` | read (BM25 + semantic + hybrid RRF) | ✅ implementato | W1-W2, hybrid W5 |
 | `find_related` | read (See Also/Compare) | ✅ implementato | W1-W2 |
-| `ask_database` | read (BM25 retrieval-only; vector W5-6) | ✅ implementato | W3 |
+| `ask_database` | read (vector + BM25 fallback) | ✅ implementato | W3, vector W5 |
 | `file_document` | write con `dry_run` | ⏳ schema pronto | W7 |
 
 Esclusi da MVP (post-W7): `summarize_topic`, `bulk_apply`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
@@ -109,7 +109,7 @@ l'app coinvolta nel `recovery_hint`.
 uv run ruff check .
 uv run black --check .
 
-# Test unit (68 test, ~1s)
+# Test unit (84 test, ~1s)
 uv run pytest tests/unit -v
 
 # Test con coverage
@@ -123,6 +123,34 @@ uv run istefox-dt-mcp --help
 uv run istefox-dt-mcp doctor       # health check (richiede DT in esecuzione)
 uv run istefox-dt-mcp serve        # avvia server stdio (per Claude Desktop)
 ```
+
+## RAG (vector search) — opt-in
+
+Il server gira in modalità BM25-only di default (zero overhead, no
+modelli da scaricare). Per attivare la ricerca vettoriale:
+
+```bash
+# 1. Abilita il RAG provider (env var)
+export ISTEFOX_RAG_ENABLED=1
+
+# 2. (Opzionale) Override modello — default MiniLM-L12-v2
+export ISTEFOX_RAG_MODEL=BAAI/bge-m3   # ~2.2GB, qualità superiore
+
+# 3. Indicizza un database DT (one-shot — sync automatico W6)
+uv run istefox-dt-mcp reindex Business
+uv run istefox-dt-mcp reindex privato --limit 100   # test parziale
+
+# 4. Verifica stato indice
+uv run istefox-dt-mcp doctor
+# {... "rag": {"indexed_count": N, "embedding_model": "..."}}
+
+# 5. Avvia server e usa search mode=hybrid o ask_database
+uv run istefox-dt-mcp serve
+```
+
+ChromaDB embedded persistente in `~/.local/share/istefox-dt-mcp/vectors/`.
+Lazy load: il modello viene scaricato/caricato al primo uso di
+`search` o `ask_database` con mode semantico, non all'avvio.
 
 ---
 

@@ -57,6 +57,22 @@ class DEVONthinkAdapter(ABC):
         """
 
     @abstractmethod
+    async def enumerate_records(
+        self,
+        database_name: str,
+        *,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, str]], int]:
+        """Enumerate content records (skip groups) in a database.
+
+        Returns (records, total_seen). `records` is a list of
+        `{uuid, name, kind, location}` dicts. Slice [offset:offset+limit].
+        `total_seen` is the running count of content records visited
+        (useful for paginating large databases).
+        """
+
+    @abstractmethod
     async def search(
         self,
         query: str,
