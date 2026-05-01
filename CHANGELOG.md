@@ -6,13 +6,38 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W3+) Pool worker JXA con benchmark p95
-- (W3+) Pydantic schemas estesi per write tool
-- (W4+) `ask_database` BM25 mode
 - (W5-6) RAG same-process (ChromaDB + bge-m3) — `ADR-003`
 - (W7) `file_document` con `dry_run` mandatory + audit before_state
-- (W9) Test strategy completa — `ADR-005`
+- (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
+
+---
+
+## [0.0.3] — 2026-05-01 — `ask_database` BM25 + benchmark baseline
+
+### Added
+- **`ask_database` tool** (retrieval-only mode, vector RAG arriva W5-6):
+  - BM25 search sulla question, top-N hit + snippet plainText
+  - Restituisce `{answer: placeholder, citations: [...]}` — il client
+    Claude usa le citations come grounded context per generare la risposta
+  - Privacy-first: question/contenuto restano on-device
+- **`JXAAdapter.get_record_text(uuid, max_chars)`** + script JXA
+  `get_record_text.js` (defensive, gestisce record kind senza testo)
+- **Cache UUID-keyed** anche per `get_record_text` (TTL 300s)
+- **`pytest-benchmark` baseline** (`tests/benchmark/`, opt-in):
+  - bridge inline call ~316 µs, script call ~322 µs (mock subprocess)
+  - cache hit ~2.7 µs, miss ~1.7 µs
+  - Overhead bridge < 0.2 % rispetto a JXA reale (~200ms)
+
+### Changed
+- `DEVONthinkAdapter` ABC estesa con `get_record_text(uuid, *, max_chars)`
+- `tests/benchmark/` escluso dalla default test session (opt-in via
+  `pytest tests/benchmark --benchmark-enable`)
+
+### Verified
+- 51 test unit pass (44 W2 + 7 nuovi su `ask_database` + `get_record_text`)
+- mypy strict 0 issues, ruff 0 issues
+- 4 benchmark pass
 
 ---
 

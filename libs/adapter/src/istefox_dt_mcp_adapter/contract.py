@@ -48,6 +48,15 @@ class DEVONthinkAdapter(ABC):
         """Fetch a single record by stable UUID. Raises RecordNotFoundError."""
 
     @abstractmethod
+    async def get_record_text(self, uuid: str, *, max_chars: int = 2000) -> str:
+        """Return plain text of a record, truncated to max_chars.
+
+        Returns empty string if the record kind doesn't expose text
+        (smart group, image without OCR, ...). Raises
+        RecordNotFoundError only if the UUID itself doesn't exist.
+        """
+
+    @abstractmethod
     async def search(
         self,
         query: str,

@@ -79,6 +79,23 @@
 
 ---
 
+## W3 status (2026-05-01)
+
+W3 **chiuso** in giornata. Aggiunto:
+- `ask_database` tool (retrieval-only BM25, vector W5-6) +
+  `get_record_text` adapter + script JXA defensive
+- `pytest-benchmark` baseline (4 test, opt-in): bridge ~316 µs,
+  cache hit 2.7 µs / miss 1.7 µs su mock subprocess
+
+51 test unit pass, mypy strict + ruff verdi. CHANGELOG v0.0.3
+pubblicato.
+
+**Prossimo (W4)**: structured logging refinement + Pydantic schemas
+estesi per write tool (preparatorio W7). Poi W5-W6 = RAG sidecar
+(ChromaDB + bge-m3 + smart rule sync) — è il vero salto di valore.
+
+---
+
 ## Latency thresholds W2 (revised)
 
 Smoke E2E reale ha confermato: il target unico **read p95 < 500ms** del

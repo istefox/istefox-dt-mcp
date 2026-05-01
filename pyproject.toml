@@ -15,6 +15,7 @@ dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
+    "pytest-benchmark>=4.0",
     "ruff>=0.5",
     "black>=24.4",
     "mypy>=1.10",
@@ -62,4 +63,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests", "apps", "libs"]
-addopts = "-v --strict-markers"
+# Default session skips benchmarks; run them with `pytest tests/benchmark`
+addopts = "-v --strict-markers --benchmark-disable --ignore=tests/benchmark"
+markers = [
+    "benchmark: pytest-benchmark micro-benchmarks (opt-in)",
+]
