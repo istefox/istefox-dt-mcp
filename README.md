@@ -144,10 +144,14 @@ uv run istefox-dt-mcp serve        # avvia server stdio (per Claude Desktop)
 
 | Variabile | Default | Effetto |
 |---|---|---|
-| `ISTEFOX_FAST_LIST_DATABASES` | unset | Se `=1`: `list_databases` salta il computo di `record_count` (ritorna `null`). Utile su database con decine di migliaia di record dove `d.contents().length` può richiedere secondi alla prima invocazione (la cache 5min ammortizza le successive). Default: count incluso, comportamento invariato. |
-| `ISTEFOX_PREVIEW_TTL_S` | `300` | Override TTL in secondi del `preview_token` (default 5 minuti). Range valido: ≥ 1. |
-| `ISTEFOX_RAG_ENABLED` | `0` | Se `=1`: abilita il provider vector RAG (vedi sezione successiva). |
+| `ISTEFOX_FAST_LIST_DATABASES` | `false` | Se truthy (`1`/`true`/`yes`/`on`): `list_databases` salta il computo di `record_count` (ritorna `null`). Utile su database con decine di migliaia di record dove `d.contents().length` può richiedere secondi alla prima invocazione (la cache 5min ammortizza le successive). Default: count incluso, comportamento invariato. |
+| `ISTEFOX_PREVIEW_TTL_S` | `300` | Override TTL in secondi del `preview_token` (default 5 minuti). Range valido: 1-3600. |
+| `ISTEFOX_RAG_ENABLED` | `false` | Se truthy: abilita il provider vector RAG (vedi sezione successiva). |
 | `ISTEFOX_RAG_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Override modello embedding (es. `BAAI/bge-m3`). Solo se RAG abilitato. |
+
+**Per installazioni `.mcpb` (Claude Desktop)**: dalla v0.0.22 le 4 variabili sono configurabili dalla UI di Claude Desktop senza editare file. Vai su **Settings → Extensions → istefox-dt-mcp → Configure** e troverai un form con label umani per ciascuna opzione. Modifica + Save + riavvia il server.
+
+**Per `pipx`/dev install**: imposta le env var nel tuo shell profile (`~/.zshrc`) o nel comando di lancio.
 
 ## RAG (vector search) — opt-in **experimental**
 
