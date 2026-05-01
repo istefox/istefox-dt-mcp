@@ -24,7 +24,7 @@ reported as `failed` with `INVALID_INPUT` and don't reach the adapter.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from istefox_dt_mcp_adapter.errors import AdapterError
 from istefox_dt_mcp_schemas.tools import (
@@ -51,6 +51,11 @@ def register(mcp: FastMCP, deps: Deps) -> None:
     async def bulk_apply(
         input: BulkApplyInput,  # noqa: A002 — input shadow is intentional
     ) -> BulkApplyOutput:
+        # Per-uuid snapshot of the location before any move op runs
+        # in this batch. Populated lazily during the apply phase and
+        # persisted in before_state so undo can revert moves precisely.
+        pre_move_snapshots: dict[str, str] = {}
+
         async def op() -> BulkApplyResult:
             outcomes: list[BulkOpOutcome] = []
 
@@ -87,6 +92,34 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                     if input.stop_on_first_error:
                         break
                     continue
+
+                # For move ops, capture the pre-move location so undo
+                # can revert to it. add_tag/remove_tag don't need a
+                # snapshot — the inverse op is mechanical (the tag
+                # name from the payload).
+                if bop.op == "move":
+                    try:
+                        snapshot_record = await deps.adapter.get_record(bop.record_uuid)
+                        pre_move_snapshots[bop.record_uuid] = snapshot_record.location
+                    except AdapterError:
+                        # If we can't snapshot, abort this op safely —
+                        # applying without a snapshot would leave us
+                        # unable to undo.
+                        outcomes.append(
+                            BulkOpOutcome(
+                                index=idx,
+                                record_uuid=bop.record_uuid,
+                                op=bop.op,
+                                status="failed",
+                                error_code="RECORD_NOT_FOUND",
+                                error_message="cannot snapshot before move",
+                            )
+                        )
+                        if failed_index is None:
+                            failed_index = idx
+                        if input.stop_on_first_error:
+                            break
+                        continue
 
                 try:
                     await _dispatch_op(deps, bop)
@@ -125,10 +158,10 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                 outcomes=outcomes,
             )
 
-        # before_state for bulk: just the list of ops + record_uuids
-        # (per-op snapshots would balloon the audit row; selective
-        # undo per op is post-MVP)
-        before_state = {
+        # before_state for bulk: the planned op list + (filled by op()
+        # at apply time) per-uuid snapshots of pre-move location, so
+        # multi-step undo can revert moves without a refetch.
+        before_state: dict[str, Any] = {
             "operations": [
                 {"uuid": o.record_uuid, "op": o.op, "payload": o.payload}
                 for o in input.operations
@@ -143,13 +176,25 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             output_factory=BulkApplyOutput,
             before_state=before_state,
         )
+        # Inject the move snapshots collected during op() into the
+        # audit record. The audit table is append-only; the trick is
+        # we mutate the dict object that safe_call already serialized
+        # — too late. Instead we re-append via the after_state side
+        # table (which carries undo-related metadata).
         if result.success and result.data is not None and result.audit_id is not None:
             result.data.preview_token = str(result.audit_id)
-            # Persist after_state with the list of ops that actually
-            # applied (status='applied'), so a future selective undo
-            # knows what to roll back without re-running validation.
+            # Persist after_state for selective undo:
+            # - applied: list of ops that succeeded, with full payload
+            #   so undo can compute the inverse op without re-reading
+            #   the original input
+            # - pre_move_snapshots: location of each moved record
+            #   before the move, keyed by uuid
             applied_ops = [
-                {"uuid": o.record_uuid, "op": o.op}
+                {
+                    "uuid": o.record_uuid,
+                    "op": o.op,
+                    "payload": _payload_for(input.operations, o.index),
+                }
                 for o in result.data.outcomes
                 if o.status == "applied"
             ]
@@ -159,6 +204,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                     {
                         "applied": applied_ops,
                         "operations_applied": result.data.operations_applied,
+                        "pre_move_snapshots": pre_move_snapshots,
                     },
                 )
         return result
@@ -221,3 +267,11 @@ def _first_failed_index(outcomes: list[BulkOpOutcome]) -> int | None:
         if o.status == "failed":
             return o.index
     return None
+
+
+def _payload_for(operations: list[BulkApplyOperation], index: int) -> dict[str, str]:
+    """Return the payload of the op at the given index. Used to
+    reconstruct the inverse op for undo without re-parsing input."""
+    if 0 <= index < len(operations):
+        return dict(operations[index].payload)
+    return {}

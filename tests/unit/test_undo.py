@@ -190,6 +190,115 @@ async def test_undo_uses_after_state_for_precise_drift_check(
     mock_adapter.remove_tag.assert_awaited_once_with("u", "Biz", dry_run=False)
 
 
+def _audit_bulk_apply(
+    deps: Deps,
+    *,
+    applied_ops: list[dict],
+    pre_move_snapshots: dict[str, str] | None = None,
+):
+    """Insert an audit entry as if a bulk_apply call had run, including
+    after_state with the applied ops + pre_move snapshots."""
+    audit_id = deps.audit.append(
+        tool_name="bulk_apply",
+        input_data={"dry_run": False, "operations": []},
+        output_data={"applied": True},
+        duration_ms=10.0,
+        before_state={"operations": []},
+    )
+    deps.audit.set_after_state(
+        audit_id,
+        {
+            "applied": applied_ops,
+            "operations_applied": len(applied_ops),
+            "pre_move_snapshots": pre_move_snapshots or {},
+        },
+    )
+    return audit_id
+
+
+@pytest.mark.asyncio
+async def test_undo_bulk_apply_dry_run_returns_inverse_plan(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """bulk_apply undo dry_run shows the inverse ops without mutating."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[
+            {"uuid": "u1", "op": "add_tag", "payload": {"tag": "alpha"}},
+            {"uuid": "u2", "op": "remove_tag", "payload": {"tag": "beta"}},
+            {"uuid": "u3", "op": "move", "payload": {"destination": "/Biz/X"}},
+        ],
+        pre_move_snapshots={"u3": "/Inbox"},
+    )
+
+    result = await undo_audit(deps, audit_id, dry_run=True)
+    assert result["reverted"] is False
+    assert result["dry_run"] is True
+    assert result["n_ops_to_revert"] == 3
+
+    plan = result["would_revert"]
+    # LIFO order: move first (was last), then remove_tag, then add_tag
+    assert plan[0] == {"uuid": "u3", "op": "move", "destination": "/Inbox"}
+    assert plan[1] == {"uuid": "u2", "op": "add_tag", "tag": "beta"}
+    assert plan[2] == {"uuid": "u1", "op": "remove_tag", "tag": "alpha"}
+    mock_adapter.apply_tag.assert_not_awaited()
+    mock_adapter.move_record.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_undo_bulk_apply_applies_inverse_ops(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """bulk_apply undo apply executes the inverse ops in LIFO order."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[
+            {"uuid": "u1", "op": "add_tag", "payload": {"tag": "alpha"}},
+            {"uuid": "u2", "op": "move", "payload": {"destination": "/Biz"}},
+        ],
+        pre_move_snapshots={"u2": "/Inbox"},
+    )
+    result = await undo_audit(deps, audit_id, dry_run=False)
+    assert result["reverted"] is True
+    assert result["reverted_count"] == 2
+    assert result["failures"] == []
+    # Move was last applied, so it's reverted first
+    mock_adapter.move_record.assert_awaited_once_with("u2", "/Inbox", dry_run=False)
+    # Then the add_tag is undone via remove_tag
+    mock_adapter.remove_tag.assert_awaited_once_with("u1", "alpha", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_undo_bulk_apply_skips_move_without_snapshot(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """If a move op has no pre_move snapshot, it must be skipped
+    (not reverted to an unknown location)."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[
+            {"uuid": "u1", "op": "move", "payload": {"destination": "/Biz"}},
+        ],
+        pre_move_snapshots={},  # no snapshot for u1
+    )
+    result = await undo_audit(deps, audit_id, dry_run=True)
+    assert result["n_ops_to_revert"] == 0
+    assert len(result["skipped"]) == 1
+    assert result["skipped"][0]["uuid"] == "u1"
+    assert "snapshot" in result["skipped"][0]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_undo_bulk_apply_no_applied_ops_reports_nothing(
+    deps: Deps,
+) -> None:
+    """If after_state has empty applied list, undo reports gracefully."""
+    audit_id = _audit_bulk_apply(deps, applied_ops=[])
+    result = await undo_audit(deps, audit_id, dry_run=False)
+    assert result["reverted"] is False
+    assert "nothing to undo" in str(result["message"])
+
+
 @pytest.mark.asyncio
 async def test_undo_after_state_diff_is_drift(
     deps: Deps, mock_adapter: AsyncMock

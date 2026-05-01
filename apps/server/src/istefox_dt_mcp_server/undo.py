@@ -17,12 +17,14 @@ Drift detection (v0.0.10+):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
 
 if TYPE_CHECKING:
+    from istefox_dt_mcp_schemas.audit import AuditEntry
+
     from .deps import Deps
 
 
@@ -52,6 +54,9 @@ async def undo_audit(
             "message": "audit_id not found",
             "dry_run": dry_run,
         }
+
+    if entry.tool_name == "bulk_apply":
+        return await _undo_bulk_apply(deps, entry, dry_run=dry_run, force=force)
 
     if entry.tool_name != "file_document":
         return {
@@ -176,3 +181,133 @@ def _is_first_undo(current_location: str, input_data: dict[str, object]) -> bool
     """
     hint = input_data.get("destination_hint")
     return isinstance(hint, str) and hint == current_location
+
+
+async def _undo_bulk_apply(
+    deps: Deps,
+    entry: AuditEntry,
+    *,
+    dry_run: bool,
+    force: bool,
+) -> dict[str, object]:
+    """Multi-step undo of a bulk_apply call.
+
+    Reads `after_state.applied` (the list of ops that succeeded with
+    their original payloads) and computes the inverse of each:
+    - `add_tag`     → `remove_tag` with the same tag
+    - `remove_tag`  → `add_tag` with the same tag
+    - `move`        → `move` back to `pre_move_snapshots[uuid]`
+
+    Reverts in reverse order (LIFO) so that any local interaction
+    between ops is undone in the opposite sequence.
+
+    `force` is currently a no-op for bulk undo (per-op drift detection
+    is post-MVP — the audit_after_state doesn't have per-op
+    after-snapshots). The flag is accepted for CLI symmetry with
+    file_document undo.
+    """
+    audit_id_str = str(entry.audit_id)
+    after = entry.after_state or {}
+    applied: list[dict[str, Any]] = after.get("applied") or []
+    snapshots: dict[str, str] = after.get("pre_move_snapshots") or {}
+
+    if not applied:
+        return {
+            "audit_id": audit_id_str,
+            "tool_name": "bulk_apply",
+            "reverted": False,
+            "drift_detected": False,
+            "message": "no applied ops recorded — nothing to undo",
+            "dry_run": dry_run,
+        }
+
+    # Compute inverse ops in LIFO order
+    inverse_plan: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    for op in reversed(applied):
+        uuid = op.get("uuid")
+        op_type = op.get("op")
+        payload = op.get("payload") or {}
+        if not uuid or not op_type:
+            continue
+
+        if op_type == "add_tag":
+            tag = payload.get("tag")
+            if tag:
+                inverse_plan.append({"uuid": uuid, "op": "remove_tag", "tag": tag})
+        elif op_type == "remove_tag":
+            tag = payload.get("tag")
+            if tag:
+                inverse_plan.append({"uuid": uuid, "op": "add_tag", "tag": tag})
+        elif op_type == "move":
+            original_location = snapshots.get(uuid)
+            if original_location:
+                inverse_plan.append(
+                    {
+                        "uuid": uuid,
+                        "op": "move",
+                        "destination": original_location,
+                    }
+                )
+            else:
+                # No snapshot → can't safely undo; skip with reason
+                skipped.append({"uuid": uuid, "reason": "no pre-move snapshot"})
+        else:
+            skipped.append({"uuid": uuid, "reason": f"unknown op {op_type}"})
+
+    if dry_run:
+        return {
+            "audit_id": audit_id_str,
+            "tool_name": "bulk_apply",
+            "reverted": False,
+            "drift_detected": False,
+            "would_revert": inverse_plan,
+            "skipped": skipped,
+            "n_ops_to_revert": len(inverse_plan),
+            "force_acknowledged": force,
+            "dry_run": True,
+            "message": "dry_run preview",
+        }
+
+    # Apply phase: execute the inverse ops in order. Best-effort —
+    # one failure does not abort the rest, but is reported.
+    reverted_count = 0
+    failures: list[dict[str, str]] = []
+    for inv in inverse_plan:
+        try:
+            if inv["op"] == "remove_tag":
+                await deps.adapter.remove_tag(inv["uuid"], inv["tag"], dry_run=False)
+            elif inv["op"] == "add_tag":
+                await deps.adapter.apply_tag(inv["uuid"], inv["tag"], dry_run=False)
+            elif inv["op"] == "move":
+                await deps.adapter.move_record(
+                    inv["uuid"], inv["destination"], dry_run=False
+                )
+            reverted_count += 1
+        except Exception as e:
+            failures.append(
+                {"uuid": inv["uuid"], "op": inv["op"], "error": str(e)[:200]}
+            )
+
+    log.info(
+        "undo_bulk_apply_completed",
+        audit_id=audit_id_str,
+        reverted=reverted_count,
+        failed=len(failures),
+        skipped=len(skipped),
+    )
+    return {
+        "audit_id": audit_id_str,
+        "tool_name": "bulk_apply",
+        "reverted": reverted_count > 0 and not failures,
+        "reverted_count": reverted_count,
+        "failures": failures,
+        "skipped": skipped,
+        "drift_detected": False,
+        "dry_run": False,
+        "message": (
+            "ok"
+            if not failures
+            else f"{reverted_count} reverted, {len(failures)} failed"
+        ),
+    }
