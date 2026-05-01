@@ -14,6 +14,50 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.20] — 2026-05-01 — Fix: undo bulk drift falso positivo (after_state refetch)
+
+### Fixed
+- **Undo `file_document` ritornava `drift_detected: true` falso
+  positivo dopo un apply riuscito**. Causa: `file_document.py`
+  salvava in `after_state.location` il `destination_hint` passato
+  in input (es. `/Inbox/MCP-Test`, formato assoluto con DB prefix),
+  mentre `undo` rilegge il record e DT ritorna
+  `record.location = "/MCP-Test/"` (relativo al DB, no prefix).
+  Mismatch → `drift_detected: true` legittimo dal punto di vista
+  del codice ma errato dal punto di vista semantico (record
+  non era stato modificato esternamente).
+- **Discovery**: l'E2E test apply effettivo della sessione 2026-05-01
+  ha fatto `file_document` apply OK su `Test MCP apply.md` →
+  spostato in `/Inbox/MCP-Test/`. Tentativo di undo ritornava
+  `drift_detected: true` con messaggio "record moved/edited since
+  the original write; pass --force". Workaround temporaneo:
+  `--force` (sicuro perché sapevamo che il drift era falso).
+
+### Changed
+- `file_document.py` ora **refetcha il record dopo l'apply** con
+  `await deps.adapter.get_record(uuid)` e salva in `after_state`
+  esattamente quello che DT ritorna (location e tags).
+- Costo: 1 chiamata `get_record` extra per ogni apply (~150ms warm
+  con cache). Trade-off accettabile per undo affidabile.
+- Se la refetch fallisce (raro), si scrive un debug log e undo
+  cade nell'euristica legacy invece di crashare.
+
+### Verified
+- 137 test unit pass (test esistente
+  `test_audit_log_persists_after_state_on_apply` aggiornato per
+  riflettere la nuova semantica refetch)
+- mypy strict + ruff + black puliti
+- Server bumped a v0.0.20
+
+### Note metodologiche
+Quinto bug E2E in sessione (record_count, score, find_related self,
+JXA defensive, destination_hint doc, ora drift falso positivo).
+Pattern ricorrente: i test unit con mock_adapter non catturano
+bug di formato/convenzione tra layer (Pydantic input vs output di
+DT). Tier 4 testing su DT reale resta indispensabile.
+
+---
+
 ## [0.0.19] — 2026-05-01 — Doc: chiarito formato `destination_hint` (database prefix obbligatorio)
 
 ### Fixed (UX/docs only — niente cambio di runtime)
