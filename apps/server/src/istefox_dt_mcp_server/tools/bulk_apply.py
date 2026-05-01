@@ -145,6 +145,22 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         )
         if result.success and result.data is not None and result.audit_id is not None:
             result.data.preview_token = str(result.audit_id)
+            # Persist after_state with the list of ops that actually
+            # applied (status='applied'), so a future selective undo
+            # knows what to roll back without re-running validation.
+            applied_ops = [
+                {"uuid": o.record_uuid, "op": o.op}
+                for o in result.data.outcomes
+                if o.status == "applied"
+            ]
+            if applied_ops:
+                deps.audit.set_after_state(
+                    result.audit_id,
+                    {
+                        "applied": applied_ops,
+                        "operations_applied": result.data.operations_applied,
+                    },
+                )
         return result
 
 

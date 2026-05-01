@@ -36,9 +36,15 @@ def _audit_file_document(
     before_location: str = "/Inbox",
     before_tags: list[str] | None = None,
     destination_hint: str | None = None,
+    after_location: str | None = None,
+    after_tags: list[str] | None = None,
 ):
-    """Insert an audit entry as if a file_document apply had run."""
-    return deps.audit.append(
+    """Insert an audit entry as if a file_document apply had run.
+
+    If `after_location`/`after_tags` are passed, also sets after_state
+    so undo can use the precise drift check.
+    """
+    audit_id = deps.audit.append(
         tool_name="file_document",
         input_data={
             "record_uuid": uuid,
@@ -54,6 +60,17 @@ def _audit_file_document(
             "name": "name",
         },
     )
+    if after_location is not None or after_tags is not None:
+        deps.audit.set_after_state(
+            audit_id,
+            {
+                "uuid": uuid,
+                "location": after_location or before_location,
+                "tags": after_tags if after_tags is not None else (before_tags or []),
+                "name": "name",
+            },
+        )
+    return audit_id
 
 
 @pytest.mark.asyncio
@@ -146,3 +163,52 @@ async def test_undo_drift_blocks_unless_force(
     assert forced["reverted"] is True
     assert forced["drift_detected"] is True
     mock_adapter.move_record.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_undo_uses_after_state_for_precise_drift_check(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """W10: with after_state set, undo can confirm no-drift even when
+    the original input had no destination_hint (the heuristic that
+    legacy undo had to fall back on)."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        destination_hint=None,  # no hint → legacy path would say "drift"
+        after_location="/Biz",
+        after_tags=["Biz"],
+    )
+    # Current state matches after_state → no drift (precise check)
+    mock_adapter.get_record.return_value = _record(location="/Biz", tags=["Biz"])
+
+    result = await undo_audit(deps, audit_id, dry_run=False)
+    assert result["reverted"] is True
+    assert result["drift_detected"] is False
+    mock_adapter.move_record.assert_awaited_once_with("u", "/Inbox", dry_run=False)
+    mock_adapter.remove_tag.assert_awaited_once_with("u", "Biz", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_undo_after_state_diff_is_drift(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """W10: when after_state and current diverge, drift is detected
+    even if the legacy heuristic would have missed it."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        destination_hint="/Biz",  # heuristic would accept /Biz as no-drift
+        after_location="/Biz",
+        after_tags=["Biz"],
+    )
+    # User added an extra tag externally — diverges from after_state
+    mock_adapter.get_record.return_value = _record(
+        location="/Biz", tags=["Biz", "manuale"]
+    )
+
+    blocked = await undo_audit(deps, audit_id, dry_run=False, force=False)
+    assert blocked["reverted"] is False
+    assert blocked["drift_detected"] is True
