@@ -2,6 +2,11 @@
 // argv: [uuid, dest_group_path]
 //   dest_group_path: "Database/Group/Subgroup" — first segment is database name
 // stdout: JSON {uuid, location} or {error: ...}
+//
+// Defensive: getRecordWithUuid and database iteration throw on
+// edge cases (UUID not resolving, database not opened); safe()
+// guards turn those into structured errors instead of opaque
+// JXA_ERROR script crashes.
 
 function run(argv) {
   var DT = Application("DEVONthink");
@@ -10,10 +15,20 @@ function run(argv) {
     return JSON.stringify({error: "DT_NOT_RUNNING"});
   }
 
+  function safe(fn, def) {
+    try {
+      var v = fn();
+      return v === undefined || v === null ? def : v;
+    } catch (e) {
+      return def;
+    }
+  }
+  function safeStr(fn) { return String(safe(fn, "") || ""); }
+
   var uuid = argv[0];
   var destPath = argv[1];
 
-  var record = DT.getRecordWithUuid(uuid);
+  var record = safe(function() { return DT.getRecordWithUuid(uuid); }, null);
   if (!record) {
     return JSON.stringify({error: "RECORD_NOT_FOUND"});
   }
@@ -26,10 +41,10 @@ function run(argv) {
   var dbName = parts[0];
   var groupPath = parts.slice(1).join("/");
 
-  var allDbs = DT.databases();
+  var allDbs = safe(function() { return DT.databases(); }, []);
   var targetDb = null;
   for (var i = 0; i < allDbs.length; i++) {
-    if (allDbs[i].name() === dbName) {
+    if (safeStr(function() { return allDbs[i].name(); }) === dbName) {
       targetDb = allDbs[i];
       break;
     }
@@ -39,17 +54,25 @@ function run(argv) {
   }
 
   var destGroup;
-  if (groupPath) {
-    destGroup = DT.createLocation(groupPath, {in: targetDb});
-  } else {
-    destGroup = targetDb.root();
+  try {
+    destGroup = groupPath
+      ? DT.createLocation(groupPath, {in: targetDb})
+      : targetDb.root();
+  } catch (e) {
+    return JSON.stringify({
+      error: "JXA_ERROR",
+      message: "createLocation failed: " + String(e)
+    });
   }
 
   try {
     DT.move({record: record, to: destGroup});
   } catch (e) {
-    return JSON.stringify({error: "JXA_ERROR", message: String(e)});
+    return JSON.stringify({error: "JXA_ERROR", message: "move failed: " + String(e)});
   }
 
-  return JSON.stringify({uuid: uuid, location: destGroup.location()});
+  return JSON.stringify({
+    uuid: uuid,
+    location: safeStr(function() { return destGroup.location(); })
+  });
 }
