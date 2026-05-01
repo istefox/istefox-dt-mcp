@@ -207,11 +207,16 @@ async def test_list_databases_default_includes_record_count(monkeypatch) -> None
     assert dbs[0].record_count == 42
 
 
+@pytest.mark.parametrize("truthy", ["1", "true", "TRUE", "yes", "Yes", "on"])
 @pytest.mark.asyncio
-async def test_list_databases_fast_mode_skips_count(monkeypatch) -> None:
-    """ISTEFOX_FAST_LIST_DATABASES=1 -> argv ('0',) -> script returns
-    null record_count, adapter passes it through."""
-    monkeypatch.setenv("ISTEFOX_FAST_LIST_DATABASES", "1")
+async def test_list_databases_fast_mode_skips_count(monkeypatch, truthy) -> None:
+    """ISTEFOX_FAST_LIST_DATABASES truthy -> argv ('0',) -> script
+    returns null record_count.
+
+    Permissive parsing matters because Claude Desktop's `user_config`
+    boolean passthrough delivers "true"/"false" as strings, not "1"/"0".
+    """
+    monkeypatch.setenv("ISTEFOX_FAST_LIST_DATABASES", truthy)
     captured: dict[str, tuple] = {}
 
     async def fake_run_script(self, name: str, *argv: str):
@@ -234,3 +239,33 @@ async def test_list_databases_fast_mode_skips_count(monkeypatch) -> None:
 
     assert captured["argv"] == ("0",)
     assert dbs[0].record_count is None
+
+
+@pytest.mark.parametrize("falsy", ["0", "false", "FALSE", "no", "off", "", "anything"])
+@pytest.mark.asyncio
+async def test_list_databases_fast_mode_falsy_keeps_count(monkeypatch, falsy) -> None:
+    """Anything non-truthy (incl. empty string from Claude Desktop's
+    default-false passthrough) leaves the default behavior intact."""
+    monkeypatch.setenv("ISTEFOX_FAST_LIST_DATABASES", falsy)
+    captured: dict[str, tuple] = {}
+
+    async def fake_run_script(self, name: str, *argv: str):
+        captured["argv"] = argv
+        return [
+            {
+                "uuid": "db1",
+                "name": "Inbox",
+                "path": "/x/Inbox.dtBase2",
+                "is_open": True,
+                "record_count": 99,
+            }
+        ]
+
+    adapter = JXAAdapter(pool_size=1, timeout_s=2.0, max_retries=1, cache=None)
+    with patch(
+        "istefox_dt_mcp_adapter.jxa.JXAAdapter._run_script", new=fake_run_script
+    ):
+        dbs = await adapter.list_databases()
+
+    assert captured["argv"] == ()  # default path
+    assert dbs[0].record_count == 99

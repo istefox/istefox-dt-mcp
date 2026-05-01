@@ -9,8 +9,38 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 - (post-MVP) Tier 2-4 testing executed (cassettes + integration su DT reale)
 - (post-MVP) CI macOS GHA per integration nightly + on-PR
 - (0.2.0) RAG benchmark cross-corpus + flip default modello (ADR-008)
-- (0.2.0) Integrazione `user_config` MCPB → env vars del server
-  (RAG_ENABLED, RAG_MODEL, PREVIEW_TTL_S)
+
+---
+
+## [0.0.22] — 2026-05-01 — `user_config` MCPB → env vars (UI configurabile da Claude Desktop)
+
+### Added
+- **Claude Desktop UI configurabile per 4 env var** via blocco
+  `user_config` nel `manifest.json` (manifest_version 0.3, sintassi
+  `${user_config.<key>}` confermata da claude-task-master 27k⭐).
+  Le 4 var sono ora esposte come campi form in Settings → Extensions
+  → istefox-dt-mcp → Configure:
+  - `fast_list_databases` (boolean, default false) → `ISTEFOX_FAST_LIST_DATABASES`
+  - `preview_ttl_s` (number, default 300, range 1-3600) → `ISTEFOX_PREVIEW_TTL_S`
+  - `rag_enabled` (boolean, default false) → `ISTEFOX_RAG_ENABLED`
+  - `rag_model` (string, default MiniLM) → `ISTEFOX_RAG_MODEL`
+  Sblocca il workflow utente dove era richiesto editare manualmente
+  `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+### Changed
+- **Permissive boolean parsing** in `JXAAdapter.list_databases` per
+  `ISTEFOX_FAST_LIST_DATABASES`. Accetta `1`, `true`, `yes`, `on`
+  (case-insensitive) — Claude Desktop serializza i boolean del
+  `user_config` come stringhe `"true"`/`"false"`, non `"1"`/`"0"`.
+  Allineato al pattern già usato in `deps.py` per `ISTEFOX_RAG_ENABLED`.
+- README sezione "Performance tuning (env vars)" aggiornata: nota
+  esplicita che le var sono configurabili dalla UI per `.mcpb`.
+
+### Verified
+- 153 unit test pass (era 141, +12: parametrize per truthy/falsy
+  values di FAST_LIST_DATABASES)
+- Bundle `.mcpb v0.0.22` build OK, manifest valido
+- Server bumped a v0.0.22
 
 ---
 

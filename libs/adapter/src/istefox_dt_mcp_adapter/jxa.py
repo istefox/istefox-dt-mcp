@@ -153,15 +153,18 @@ class JXAAdapter(DEVONthinkAdapter):
         )
 
     async def list_databases(self) -> list[Database]:
-        # ISTEFOX_FAST_LIST_DATABASES=1 skips the recursive
-        # d.contents().length count, returning record_count=null. Useful
-        # on databases with tens of thousands of records where the first
-        # call is slow (the 5min cache amortizes subsequent calls but
-        # not the first one). Default behavior unchanged.
-        skip_count = os.environ.get("ISTEFOX_FAST_LIST_DATABASES") == "1"
-        cache_key = (
-            "list_databases:fast" if skip_count else "list_databases"
-        )
+        # ISTEFOX_FAST_LIST_DATABASES enables fast mode (skip the
+        # recursive d.contents().length count, return record_count=null).
+        # Useful on databases with tens of thousands of records where
+        # the first call is slow (the 5min cache amortizes subsequent
+        # calls but not the first one). Default behavior unchanged.
+        #
+        # Permissive truthy parsing: accepts "1", "true", "yes", "on"
+        # (case-insensitive). Claude Desktop's `user_config` boolean
+        # passthrough sends "true"/"false" strings, not "1"/"0".
+        raw = os.environ.get("ISTEFOX_FAST_LIST_DATABASES", "")
+        skip_count = raw.lower() in {"1", "true", "yes", "on"}
+        cache_key = "list_databases:fast" if skip_count else "list_databases"
         if self._cache and (cached := self._cache.get(cache_key)):
             return [Database.model_validate(d) for d in cached]
 
