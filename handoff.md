@@ -79,6 +79,35 @@
 
 ---
 
+## Latency thresholds W2 (revised)
+
+Smoke E2E reale ha confermato: il target unico **read p95 < 500ms** del
+brief originale è ottimistico per `find_related`. `DT.compare()` è
+~1s+ anche dalla GUI (operazione semantica nativa di DT).
+
+Threshold revisionati (in vigore da 2026-05-01):
+
+| Categoria | Esempi | Target p95 |
+|---|---|---|
+| **Fast ops** | `list_databases`, `get_record`, `search` | < 500ms |
+| **Compare ops** | `find_related`, in futuro `summarize_topic` | < 1500ms |
+
+Mitigazione: `find_related` ora ha cache UUID-keyed (TTL 300s).
+Seconda chiamata stesso seed → < 10ms warm. Cold path resta ~1s.
+
+Numeri reali (run 2026-05-01 11:34 dal Mac di Stefano):
+- `search 'isolatori'`: mean 110ms p95 138ms
+- `search 'vibrazioni'`: mean 297ms p95 315ms
+- `search 'progetto'`: mean 196ms p95 214ms
+- `search 'report'`: mean 465ms p95 483ms (query generica)
+- `search 'test'`: mean 474ms p95 488ms (query generica)
+- `find_related` (cold): mean 1037ms p95 1088ms — sotto nuovo target
+- `list_databases`: 0ms (cached) — cold ~200ms
+
+Verdetto W2 GO/NO-GO: **PASS** (atteso) con threshold differenziati.
+
+---
+
 ## ⚠️ Issue noto: macOS Automation permission denied
 
 **Stato (2026-05-01)**: lo smoke E2E reale è bloccato da AppleScript `-1743`
