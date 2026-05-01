@@ -12,6 +12,38 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.27] — 2026-05-01 — Integration test fixes round 2: get_record + smoke step 3
+
+Discovery dal secondo run E2E (Stefano, 2026-05-01 22:13, Terminal.app):
+- Latency PASS (mean 313ms, well under 500ms target)
+- 6/7 integration smoke pass; 1 fail: `test_get_record_round_trip`
+  perche' il fix di v0.0.26 era applicato solo a search_bm25.js,
+  non a get_record.js -> mismatch search.reference_url (con fallback)
+  vs get_record.reference_url (empty)
+- Smoke step 3 fail: query SQL con table `audit` invece di
+  `audit_log` e column `timestamp` invece di `ts`. Inoltre
+  l'invariante "1+ row created today" e' irrealistica per fresh
+  install + audit list (read op, doesn't append).
+
+### Fixed
+- **`get_record.js`**: stessa fallback `"x-devonthink-item://"+uuid`
+  di search_bm25 quando referenceUrl() ritorna empty. Garantisce
+  consistency search vs get_record round-trip.
+- **`find_related.js`**: stessa fallback per consistency su tutti
+  i 3 script che emettono reference_url.
+- **`scripts/smoke_e2e.sh` step 3**:
+  - Query corretta: `audit_log` (era `audit`), `ts` (era `timestamp`)
+  - Schema check invece di "rows today" check (piu' robusto per
+    fresh install)
+  - Output mostra total rows (informational), non blocking
+
+### Verified
+- 163 unit + contract pass
+- mypy + ruff + black clean
+- bash -n smoke_e2e.sh OK
+
+---
+
 ## [0.0.26] — 2026-05-01 — Integration test fixes (search reference_url + bench skip)
 
 Discovery dal primo run E2E real degli integration test (Stefano,
