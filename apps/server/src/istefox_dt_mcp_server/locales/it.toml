@@ -43,3 +43,15 @@ recovery_hint = "Vedi il dettaglio dell'errore per il campo problematico."
 [error.INTERNAL_ERROR]
 message = "Errore interno."
 recovery_hint = "Controlla i log strutturati su stderr per il dettaglio tecnico."
+
+[error.INVALID_PREVIEW_TOKEN]
+message = "Token di anteprima non valido."
+recovery_hint = "Esegui di nuovo il tool con dry_run=true per ottenere un nuovo preview_token, poi usa quello come confirm_token."
+
+[error.EXPIRED_PREVIEW_TOKEN]
+message = "Token di anteprima scaduto."
+recovery_hint = "I preview_token scadono dopo 5 minuti. Esegui di nuovo il tool con dry_run=true per generarne uno fresco."
+
+[error.CONSUMED_PREVIEW_TOKEN]
+message = "Token di anteprima già usato."
+recovery_hint = "Ogni preview_token può essere usato una sola volta. Esegui di nuovo il tool con dry_run=true per generarne uno nuovo."
