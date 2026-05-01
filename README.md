@@ -109,7 +109,7 @@ l'app coinvolta nel `recovery_hint`.
 uv run ruff check .
 uv run black --check .
 
-# Test unit (51 test, ~1s)
+# Test unit (68 test, ~1s)
 uv run pytest tests/unit -v
 
 # Test con coverage

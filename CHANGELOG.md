@@ -6,10 +6,41 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W5-6) RAG same-process (ChromaDB + bge-m3) — `ADR-003`
-- (W7) `file_document` con `dry_run` mandatory + audit before_state
+- (W5-6) RAG same-process implementation `ChromaRAGProvider` (ChromaDB + bge-m3) — `ADR-003`
+- (W7) `file_document` con `dry_run` mandatory + audit before_state + `confirm_token` flow
+- (W7+) `bulk_apply`, `undo` (schema già pronti)
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
+
+---
+
+## [0.0.4] — 2026-05-01 — W4: logging refinement + write schemas + RAG ABC
+
+### Added
+- **Structured logging refinement**:
+  - `safe_call` ora binda `request_id`, `tool`, `audit_id` al
+    `structlog.contextvars` per la durata dell'op (auto-propagati a
+    qualunque log nested)
+  - Nuovo evento `tool_call_started` (DEBUG) con summary input
+    sanitizzato — `query`, `question`, `snippet`, `answer` redatti
+    a `<str len=N>` per non leakare contenuti via stderr/log sink
+  - `unbind_contextvars` in `finally` previene bleed cross-request
+- **Pydantic schemas write tools** (schema only, impl W7+):
+  - `FileDocumentInput.confirm_token` + `FileDocumentResult.preview_token`
+    (preview-then-apply pattern)
+  - `BulkApplyInput`/`BulkApplyOperation`/`BulkApplyResult`
+    (atomic batch, dry_run mandatory, max 500 ops)
+  - `UndoInput`/`UndoResult` (selective undo via audit_id +
+    `drift_detected` flag)
+- **RAGProvider ABC** (prep W5-6):
+  - `libs/adapter/.../rag.py` con `RAGProvider` ABC + `NoopRAGProvider`
+    fallback (registrato come default in `Deps`)
+  - `libs/schemas/.../rag.py` con `RAGHit`, `RAGStats`, `RAGFilter`
+  - Permette swap a `ChromaRAGProvider` (W5-6) senza refactor server
+
+### Verified
+- 68 test unit pass (62 W3 + 6 nuovi RAG/logging/schemas)
+- mypy strict + ruff + black puliti
 
 ---
 

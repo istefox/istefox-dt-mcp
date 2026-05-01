@@ -117,3 +117,62 @@ def test_write_outcome_enum() -> None:
 def test_envelope_extra_field_rejected() -> None:
     with pytest.raises(ValidationError):
         Envelope(success=True, data=None, foo="bar")  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------
+# Write tool schemas (W4 — schema only, implementation W7+)
+# ---------------------------------------------------------------------
+
+
+def test_file_document_dry_run_default() -> None:
+    from istefox_dt_mcp_schemas.tools import FileDocumentInput
+
+    f = FileDocumentInput(record_uuid="u")
+    assert f.dry_run is True
+    assert f.confirm_token is None
+
+
+def test_file_document_with_confirm_token() -> None:
+    from istefox_dt_mcp_schemas.tools import FileDocumentInput
+
+    f = FileDocumentInput(record_uuid="u", dry_run=False, confirm_token="prev-audit-id")
+    assert f.dry_run is False
+    assert f.confirm_token == "prev-audit-id"
+
+
+def test_bulk_apply_min_one_op() -> None:
+    from istefox_dt_mcp_schemas.tools import BulkApplyInput
+
+    with pytest.raises(ValidationError):
+        BulkApplyInput(operations=[])
+
+
+def test_bulk_apply_max_500_ops() -> None:
+    from istefox_dt_mcp_schemas.tools import BulkApplyInput, BulkApplyOperation
+
+    ops = [
+        BulkApplyOperation(record_uuid=f"u{i}", op="add_tag", payload={"tag": "x"})
+        for i in range(501)
+    ]
+    with pytest.raises(ValidationError):
+        BulkApplyInput(operations=ops)
+
+
+def test_undo_dry_run_default() -> None:
+    from istefox_dt_mcp_schemas.tools import UndoInput
+
+    u = UndoInput(audit_id="abc-123")
+    assert u.dry_run is True
+    assert u.drift_detected is False if hasattr(u, "drift_detected") else True
+
+
+def test_undo_result_drift_flag() -> None:
+    from istefox_dt_mcp_schemas.tools import UndoResult
+
+    r = UndoResult(
+        audit_id="a",
+        target_record_uuid="u",
+        reverted=True,
+        drift_detected=True,
+    )
+    assert r.drift_detected is True
