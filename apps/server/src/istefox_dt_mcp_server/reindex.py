@@ -116,3 +116,118 @@ async def _flush(
         await index_one(uuid, text, meta)
         n += 1
     return n
+
+
+async def reconcile_database(
+    deps: Deps,
+    database_name: str,
+    *,
+    batch_size: int = BATCH_SIZE,
+) -> dict[str, int]:
+    """Reconcile a DT database against the RAG store.
+
+    Strategy (set-diff, no fingerprint yet — fingerprint diff lands
+    in v1.5 once we wire the modification_date round-trip):
+    - Compute `dt_uuids` by walking DT (paged enumerate)
+    - Compute `rag_uuids` via `rag.list_uuids()`
+    - Index `dt_uuids - rag_uuids`  (new records)
+    - Remove `rag_uuids - dt_uuids`  (orphan vectors)
+    - Skip the intersection — fingerprint-based update comes later
+
+    Returns counters: {dt_count, rag_count, indexed, removed,
+    empty_text, errors}.
+    """
+    from istefox_dt_mcp_adapter.rag import NoopRAGProvider
+
+    if isinstance(deps.rag, NoopRAGProvider):
+        raise RuntimeError(
+            "RAG provider is Noop — set ISTEFOX_RAG_ENABLED=1 before reconcile"
+        )
+
+    counters = {
+        "dt_count": 0,
+        "rag_count": 0,
+        "indexed": 0,
+        "removed": 0,
+        "empty_text": 0,
+        "errors": 0,
+    }
+
+    # Step 1: enumerate all DT content records
+    dt_records: dict[str, dict[str, str]] = {}
+    offset = 0
+    page = 500
+    while True:
+        records, _total = await deps.adapter.enumerate_records(
+            database_name, limit=page, offset=offset
+        )
+        if not records:
+            break
+        for rec in records:
+            uuid = rec.get("uuid") or ""
+            if uuid:
+                dt_records[uuid] = rec
+        offset += len(records)
+        if len(records) < page:
+            break
+    counters["dt_count"] = len(dt_records)
+
+    # Step 2: read what's already in the vector store
+    rag_uuids = await deps.rag.list_uuids()
+    counters["rag_count"] = len(rag_uuids)
+
+    dt_uuid_set = set(dt_records.keys())
+    to_add = dt_uuid_set - rag_uuids
+    to_remove = rag_uuids - dt_uuid_set
+
+    log.info(
+        "reconcile_diff",
+        database=database_name,
+        dt_count=counters["dt_count"],
+        rag_count=counters["rag_count"],
+        to_add=len(to_add),
+        to_remove=len(to_remove),
+    )
+
+    # Step 3: remove orphans
+    for uuid in to_remove:
+        try:
+            await deps.rag.remove(uuid)
+            counters["removed"] += 1
+        except Exception as e:
+            log.warning("reconcile_remove_failed", uuid=uuid, error=str(e))
+            counters["errors"] += 1
+
+    # Step 4: index newcomers
+    pending: list[tuple[str, str, dict[str, str]]] = []
+    for uuid in to_add:
+        rec = dt_records[uuid]
+        try:
+            text = await deps.adapter.get_record_text(uuid, max_chars=SNIPPET_CHARS)
+        except Exception as e:
+            log.warning("reconcile_fetch_failed", uuid=uuid, error=str(e))
+            counters["errors"] += 1
+            continue
+        if not text.strip():
+            counters["empty_text"] += 1
+            continue
+        metadata = {
+            "database": database_name,
+            "kind": rec.get("kind") or "",
+            "name": rec.get("name") or "",
+            "location": rec.get("location") or "",
+        }
+        pending.append((uuid, text, metadata))
+        if len(pending) >= batch_size:
+            counters["indexed"] += await _flush(deps.rag, pending)
+            pending.clear()
+
+    if pending:
+        counters["indexed"] += await _flush(deps.rag, pending)
+
+    # Mark reconcile timestamp on the provider if it supports it
+    mark = getattr(deps.rag, "mark_reconciled", None)
+    if callable(mark):
+        mark()
+
+    return counters

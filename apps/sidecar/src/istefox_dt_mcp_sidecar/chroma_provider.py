@@ -203,6 +203,16 @@ class ChromaRAGProvider(RAGProvider):
             except Exception as e:
                 log.debug("rag_remove_idempotent", uuid=uuid, error=str(e))
 
+    async def list_uuids(self) -> set[str]:
+        if self._collection is None:
+            return set()
+        result = await asyncio.to_thread(self._collection.get, include=[])
+        ids = result.get("ids") or []
+        return set(ids)
+
+    def mark_reconciled(self) -> None:
+        self._last_reconcile_at = dt.datetime.now(dt.UTC).isoformat()
+
     async def stats(self) -> RAGStats:
         if self._collection is None:
             return RAGStats(

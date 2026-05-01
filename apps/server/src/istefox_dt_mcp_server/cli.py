@@ -100,6 +100,109 @@ def reindex(database: str, limit: int | None, batch_size: int) -> None:
     click.echo(json.dumps(counters, indent=2))
 
 
+@cli.command()
+@click.argument("database")
+def reconcile(database: str) -> None:
+    """Reconcile vector store against a DEVONthink database.
+
+    Computes the set-diff DT vs RAG: indexes new records, removes
+    orphans. Idempotent — safe to run on a cron. Requires
+    ISTEFOX_RAG_ENABLED=1.
+    """
+    from .reindex import reconcile_database
+
+    deps = build_default_deps()
+
+    async def run() -> dict[str, int]:
+        return await reconcile_database(deps, database)
+
+    counters = asyncio.run(run())
+    click.echo(json.dumps(counters, indent=2))
+
+
+@cli.command()
+@click.option(
+    "--port",
+    type=int,
+    default=27205,
+    show_default=True,
+    help="Webhook port (loopback only).",
+)
+@click.option(
+    "--databases",
+    "databases",
+    multiple=True,
+    help="Databases to reconcile periodically (repeat for many).",
+)
+@click.option(
+    "--reconcile-interval-s",
+    type=int,
+    default=21600,  # 6h
+    show_default=True,
+    help="Seconds between reconciliation passes (0 = disabled).",
+)
+def watch(port: int, databases: tuple[str, ...], reconcile_interval_s: int) -> None:
+    """Run the sync daemon: webhook listener + periodic reconciliation.
+
+    Pair with a DEVONthink 4 smart rule that POSTs to
+    http://127.0.0.1:<port>/sync-event on record create/modify/delete.
+    See `docs/smart-rules/sync_rag.md` for the AppleScript template.
+
+    Optional Bearer token: set ISTEFOX_WEBHOOK_TOKEN before launch.
+    Requires ISTEFOX_RAG_ENABLED=1.
+    """
+    from .reindex import reconcile_database
+    from .sync_handler import process_sync_event
+    from .webhook import WebhookListener, consume_events
+
+    deps = build_default_deps()
+
+    listener = WebhookListener(port=port)
+    listener.start()
+
+    async def run() -> None:
+        stop_event = asyncio.Event()
+
+        async def reconcile_loop() -> None:
+            if reconcile_interval_s <= 0 or not databases:
+                return
+            while not stop_event.is_set():
+                for db in databases:
+                    try:
+                        c = await reconcile_database(deps, db)
+                        click.echo(
+                            f"[reconcile {db}] {json.dumps(c)}",
+                            err=True,
+                        )
+                    except Exception as e:
+                        click.echo(f"[reconcile {db}] ERROR: {e}", err=True)
+                try:
+                    await asyncio.wait_for(
+                        stop_event.wait(), timeout=reconcile_interval_s
+                    )
+                except TimeoutError:
+                    continue
+
+        async def event_handler(event: dict[str, Any]) -> None:
+            await process_sync_event(deps, event)
+
+        consumer = asyncio.create_task(
+            consume_events(listener, event_handler, stop_event=stop_event)
+        )
+        cron = asyncio.create_task(reconcile_loop())
+
+        try:
+            await asyncio.Event().wait()  # block forever, KeyboardInterrupt to stop
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            stop_event.set()
+            await asyncio.gather(consumer, cron, return_exceptions=True)
+
+    try:
+        asyncio.run(run())
+    finally:
+        listener.stop()
+
+
 def main() -> None:
     cli(obj={})
 

@@ -109,7 +109,7 @@ l'app coinvolta nel `recovery_hint`.
 uv run ruff check .
 uv run black --check .
 
-# Test unit (84 test, ~1s)
+# Test unit (100 test, ~4s)
 uv run pytest tests/unit -v
 
 # Test con coverage
@@ -151,6 +151,29 @@ uv run istefox-dt-mcp serve
 ChromaDB embedded persistente in `~/.local/share/istefox-dt-mcp/vectors/`.
 Lazy load: il modello viene scaricato/caricato al primo uso di
 `search` o `ask_database` con mode semantico, non all'avvio.
+
+### Sync automatico (W6 — opt-in)
+
+Per indicizzazione incrementale in tempo reale via DT4 smart rule
++ reconciliation periodica:
+
+```bash
+# 1. (Opz.) genera token webhook
+export ISTEFOX_WEBHOOK_TOKEN="$(openssl rand -hex 16)"
+
+# 2. Avvia il daemon
+uv run istefox-dt-mcp watch \
+    --port 27205 \
+    --databases Business --databases privato \
+    --reconcile-interval-s 21600   # ogni 6h
+
+# 3. Configura le smart rule DT4 (vedi docs/smart-rules/sync_rag.md)
+# 4. Reconciliation manuale ogni tanto:
+uv run istefox-dt-mcp reconcile Business
+```
+
+Per auto-start a boot: vedi `docs/smart-rules/sync_rag.md` §"Avvio
+automatico (launchd)".
 
 ---
 

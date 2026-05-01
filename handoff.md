@@ -79,6 +79,38 @@
 
 ---
 
+## W6 status (2026-05-01)
+
+W6 chiuso in giornata. Aggiunto:
+- **Reconciliation hash-based** (set-diff DT vs RAG): `reconcile_database`
+  in `apps/server/reindex.py`. Indicizza nuovi UUID, rimuove orfani.
+  Idempotent — safe per cron.
+- **`reconcile <database>` CLI command**.
+- **`WebhookListener`** stdlib loopback su `127.0.0.1:27205/sync-event`,
+  bounded queue 1024, optional Bearer auth via env.
+- **`process_sync_event`**: dispatcher webhook event → RAG provider.
+- **`watch` CLI daemon**: webhook listener + cron reconciliation.
+- **Smart rule template DT4** in `docs/smart-rules/sync_rag.md` con
+  AppleScript snippet + launchd plist per auto-start.
+
+100 test pass (84 W5 + 16 nuovi). mypy strict + ruff + black clean.
+CHANGELOG v0.0.6 publishato.
+
+**Per testare end-to-end** quando vuoi:
+```bash
+export ISTEFOX_RAG_ENABLED=1
+uv run istefox-dt-mcp reindex Business --limit 50    # popolamento iniziale
+uv run istefox-dt-mcp watch --databases Business     # daemon
+# poi configura smart rule DT4 → vedi docs/smart-rules/sync_rag.md
+```
+
+**Prossimo (W7)**: write tools — `file_document` con dry_run + audit
+before_state + confirm_token flow. Schema già pronto da W4. Anche:
+- ADR-008 model selection (benchmark MiniLM vs bge-m3 su corpus reale)
+- Fingerprint-based reconciliation (modification_date diff)
+
+---
+
 ## W5 status (2026-05-01)
 
 W5 chiuso in giornata. Aggiunto:

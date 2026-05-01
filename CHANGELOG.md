@@ -6,13 +6,61 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W6) Smart-rule-driven incremental sync DT4 → ChromaRAGProvider
-- (W6) Local webhook receiver per smart-rule events
-- (W6) Reconciliation notturna hash-based
 - (W7) `file_document` con `dry_run` mandatory + audit before_state + `confirm_token` flow
 - (W7+) `bulk_apply`, `undo` (schema già pronti)
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
+
+---
+
+## [0.0.6] — 2026-05-01 — W6: smart-rule sync + reconciliation
+
+### Added
+- **`reconcile_database`** in `apps/server/reindex.py`: walk DT,
+  set-diff vs vector store, indicizza nuovi UUID, rimuove orfani.
+  Idempotent. Foundation per smart rule + cron notturno.
+- **`reconcile <database>` CLI command**: lancia reconciliation
+  one-shot, output JSON counters
+  `{dt_count, rag_count, indexed, removed, empty_text, errors}`.
+- **`RAGProvider.list_uuids() -> set[str]`** nell'ABC + impl in
+  `ChromaRAGProvider` (via `collection.get(include=[])` per ridurre
+  payload). NoopRAGProvider torna set vuoto.
+- **`ChromaRAGProvider.mark_reconciled()`** — aggiorna timestamp
+  `last_reconcile_at` esposto via `stats()` e `doctor`.
+- **`WebhookListener`** (`apps/server/webhook.py`): HTTP server
+  stdlib loopback su `127.0.0.1:27205/sync-event`. Stdlib only,
+  zero nuove deps.
+  - Bounded queue (1024 events) → asyncio consumer
+  - Optional Bearer auth via `ISTEFOX_WEBHOOK_TOKEN` env
+  - Schema strict: `{action: created|modified|deleted, uuid, database}`
+- **`process_sync_event`** in `apps/server/sync_handler.py`: applica
+  un singolo evento webhook al RAG provider (index/remove + metadata
+  fetch).
+- **`watch` CLI command**: lancia daemon webhook + cron
+  reconciliation:
+  ```
+  istefox-dt-mcp watch \\
+      --port 27205 \\
+      --databases Business --databases privato \\
+      --reconcile-interval-s 21600
+  ```
+- **Smart rule template DT4** (`docs/smart-rules/sync_rag.md`):
+  guida step-by-step utente per configurare 3 smart rule
+  (Imported / Modified / Trashed) + AppleScript snippet che POSTa
+  al webhook + esempio launchd plist per auto-start.
+
+### Verified
+- 100 test unit pass (84 W5 + 16 nuovi: 6 webhook handler, 6
+  sync_handler, 4 reconcile)
+- mypy strict + ruff + black puliti
+
+### Pending
+- ADR-008 model selection benchmark (MiniLM vs bge-m3 su corpus
+  reale Stefano)
+- Fingerprint-based reconciliation (modification_date diff per
+  detectare modifiche, oggi solo set-diff)
+- Smart-rule end-to-end test su DT4 reale di Stefano (richiede
+  setup utente delle smart rule)
 
 ---
 

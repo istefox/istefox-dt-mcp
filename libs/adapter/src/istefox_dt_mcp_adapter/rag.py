@@ -50,6 +50,15 @@ class RAGProvider(ABC):
     async def stats(self) -> RAGStats:
         """Snapshot of index state for /ready and observability."""
 
+    async def list_uuids(self) -> set[str]:
+        """Return the full set of UUIDs currently indexed.
+
+        Used by `reconcile` to compute set-diff against the source
+        of truth (DT). Default impl returns empty set — Noop and
+        single-shot providers can leave it as-is.
+        """
+        return set()
+
     async def close(self) -> None:
         """Release embedding model + DB handles."""
         return None
