@@ -12,6 +12,31 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.24] — 2026-05-01 — Undo: drift_details per debug visibile
+
+### Added
+- **`drift_details` nel response di `undo`** quando `drift_detected: true`.
+  Mostra ESATTAMENTE cosa è cambiato:
+  ```json
+  "drift_details": {
+    "tags": {
+      "expected": ["Triage"],
+      "current": ["Triage", "auto-added-by-DT"],
+      "added": ["auto-added-by-DT"],
+      "removed": []
+    }
+  }
+  ```
+  Sblocca il debug dei false positive senza dover ispezionare l'audit
+  log SQLite a mano. Triggered dall'E2E test 2026-05-01 dove drift
+  era misterioso (after_state coerente con apply, ma drift segnalato).
+
+### Verified
+- 12 test test_undo.py ancora passing (drift_details è additivo, non
+  cambia il path principale di drift detection)
+
+---
+
 ## [0.0.23] — 2026-05-01 — CLI `audit list` per recuperare audit_id
 
 ### Added
