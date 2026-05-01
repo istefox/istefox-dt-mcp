@@ -16,6 +16,41 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ---
 
+## [0.0.2] — 2026-05-01 — W2 GO/NO-GO PASS
+
+### Added
+- `AutomationPermissionError` con caller process detection — mappa
+  AppleScript `-1743` (errAEEventNotPermitted) a errore strutturato
+  con `recovery_hint` che nomina l'app GUI da autorizzare
+- JXA scripts difensivi: `safe(fn, default)` wrapper per ogni
+  property access; record che falliscono individualmente vengono
+  saltati invece di abortire la call (fix `-1700` errAECoercionFail)
+- Cache UUID-keyed su `find_related` (TTL 300s) — iter 2-N stesso
+  seed scendono da ~1s a <10ms
+- `scripts/smoke_e2e.py`: benchmark E2E con warmup, stderr capture,
+  threshold a due tier (fast < 500ms / compare < 1500ms)
+- `mypy --strict` ora bloccante in CI (rimosso `continue-on-error`)
+
+### Changed
+- `safe_call` generic signature `[T, OutT: Envelope[Any]]` — preserva
+  tipo concreto end-to-end (no più collapse a `Envelope[Any]`)
+- `tool.uv.dev-dependencies` → `dependency-groups.dev` (deprecato in uv)
+- `uv.lock` ora committato (best practice repro builds)
+
+### Fixed
+- snippet rimosso da `search_bm25.js` (era principale colpevole `-1700`
+  via `r.plainText()`); enrichment lazy on-demand in tool dedicato post-MVP
+- `move_record` `location_after` sempre `str` (no più `Any | None` leak)
+
+### Verified (real DEVONthink 4.2.2 on macOS Tahoe)
+- Health check, `list_databases`, `search` (5 query reali),
+  `find_related` tutti operativi end-to-end
+- Fast ops p95: 487ms (target 500ms) ✅
+- Compare ops p95: 1009ms (target 1500ms) ✅
+- Tutti i 44 test unit passano + CI verde su 5 commit consecutivi
+
+---
+
 ## [0.0.1] — 2026-04-30 — Foundations W1-W2
 
 ### Added
