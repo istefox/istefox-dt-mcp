@@ -9,6 +9,136 @@ MCP server per DEVONthink 4 — outcome-oriented tools, RAG locale opzionale, pr
 
 > **⚠️ Pre-release (0.0.x)**: l'API dei tool è considerata stabile; possono esserci breaking change minori prima di **0.1.0** (target metà maggio 2026). RAG vector è opt-in experimental. Vedi [`handoff.md`](handoff.md) per lo stato corrente, [`CLAUDE.md`](CLAUDE.md) per i vincoli, [`docs/adr/`](docs/adr/) per le decisioni consolidate.
 
+---
+
+## Quick Install (3 strade)
+
+| Strada | Per chi | Prerequisiti |
+|---|---|---|
+| **A — `.mcpb` desktop extension** (raccomandato) | Utenti Claude Desktop, zero-config | Claude Desktop ≥ 0.8 |
+| **B — `pipx install`** (CLI standalone) | CLI users, altri host MCP | Python 3.12, `pipx` |
+| **C — Source / dev install** | Contributor, debug | `uv`, git |
+
+### A — `.mcpb` desktop extension (raccomandato)
+
+Drag-and-drop in Claude Desktop, 1-click. Il bundle gestisce runtime + dipendenze.
+
+1. Scarica l'ultimo `.mcpb` da [GitHub Releases](https://github.com/istefox/istefox-dt-mcp/releases/latest)
+2. Trascinalo sulla finestra di Claude Desktop (oppure **Settings → Developer → Install Bundle**)
+3. Al primo uso macOS chiederà il permesso AppleEvents — accetta
+
+### B — `pipx install` (CLI standalone)
+
+```bash
+pipx install git+https://github.com/istefox/istefox-dt-mcp
+```
+
+Poi aggiungi a `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "istefox-dt-mcp": {
+      "command": "istefox-dt-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### C — Source / dev install
+
+```bash
+git clone https://github.com/istefox/istefox-dt-mcp.git
+cd istefox-dt-mcp
+uv sync --all-packages
+uv run istefox-dt-mcp doctor
+```
+
+Vedi [Setup](#setup) per i dettagli completi (permessi macOS, troubleshooting installazione).
+
+<!-- TODO before 0.1.0 tag:
+     - docs/assets/install.gif (Claude Desktop install .mcpb, ~5s loop, ≤5MB)
+     - docs/assets/demo.gif (chat → file_document preview → apply → undo, ~15s)
+     - docs/assets/architecture.svg (diagramma a layer)
+     Capturer: kap.app o Gifox; ottimizzazione: gifsicle -O3
+-->
+
+---
+
+## Prerequisiti
+
+- **macOS 14+** (Sonoma o successivi)
+- **DEVONthink 4** (Pro o standard, qualsiasi licenza) installato e in esecuzione
+- **Spazio disco**: ~300MB per il bundle, **+2GB** se attivi RAG con `bge-m3`
+- **AppleEvents permission** al terminale (per pipx/dev) o a Claude Desktop (per `.mcpb`) — viene richiesto automaticamente al primo uso
+
+---
+
+## Cosa puoi chiedere a Claude
+
+Esempi di prompt naturali e tool MCP che si attivano. Tutti gli esempi assumono Claude Desktop con il connector installato e DEVONthink in esecuzione.
+
+- *"Cerca tutto su 'isolatori antivibranti' negli ultimi 2 anni"*
+  → `search` (BM25 di default, hybrid se RAG attivo)
+- *"Cosa abbiamo proposto a Cliente X?"*
+  → `ask_database` (BM25 + sintesi; vector se RAG opt-in — vedi [RAG](#rag-vector-search--opt-in-experimental))
+- *"Trovami documenti simili a questo PDF"* (con un record selezionato in DT)
+  → `find_related` (See Also/Compare nativo DT)
+- *"Filemi questo allegato nella cartella `/Inbox/Triage` e taggalo come `urgente`"*
+  → `file_document` con preview, ti mostra cosa farà, poi conferma con `confirm_token`
+- *"Sposta tutti i PDF di marzo dalla `Inbox` a `/Archivio/2026`"*
+  → `bulk_apply` (batch dry-run + apply selettivo per record)
+- *"Quali database sono aperti in DT?"*
+  → `list_databases` (read-only, cache 5min)
+
+I tool write (`file_document`, `bulk_apply`) sono **dry-run by default**: la prima chiamata produce sempre una preview. L'apply richiede un `confirm_token` esplicito. L'`audit_id` restituito permette `undo` selettivo via CLI.
+
+<!-- TODO before 0.1.0 tag:
+     - docs/assets/demo.gif posizionata qui (chat → file_document preview → apply → undo)
+-->
+
+---
+
+## Privacy & sicurezza
+
+Il connector è progettato **privacy-first** e **local-only**:
+
+- **Tutto resta sulla tua macchina**: nessun dato esce. Niente telemetry, niente embedding cloud, niente analytics. Il modello embedding (se attivi RAG) gira locale via `sentence-transformers`.
+- **Audit log SQLite append-only** di **ogni** operazione (read incluse) in `~/.local/share/istefox-dt-mcp/audit.db`. Retention default 90 giorni, configurabile.
+- **Tool di scrittura sempre `dry_run=true` by default**, pattern preview-then-apply con `confirm_token` a TTL breve (5 min default).
+- **Undo selettivo via `audit_id`**: ogni write op salva il before-state, ripristinabile con `istefox-dt-mcp audit undo <audit_id>`.
+- **Implementazione clean-room**, **license MIT**: nessun codice copiato da progetti GPL (vedi [Vincoli legali](#vincoli-legali)).
+- **Adatto a dati sensibili**: contratti, fatture, note personali, corrispondenza cliente.
+
+---
+
+## Roadmap
+
+| Versione | Cosa | Riferimenti |
+|---|---|---|
+| **0.1.0** (questo release, mag 2026) | 6 tool MCP, audit + undo, bundle `.mcpb`, BM25-only retrieval | — |
+| **0.2.0** (Q3 2026) | RAG benchmark cross-corpus + flip default modello, drift detection 3-stati | [ADR-008](docs/adr/0008-embedding-model-selection.md) |
+| **0.3.0+** (Q4 2026) | HTTP transport + OAuth multi-device, tool aggiuntivi (`summarize_topic`, `create_smart_rule`) | [ADR-006](docs/adr/0006-transport-stdio-only.md), [ADR-004](docs/adr/0004-mvp-tool-scope.md) |
+
+Backlog completo in [`handoff.md`](handoff.md).
+
+---
+
+## Troubleshooting top 5
+
+| Errore | Sintomo | Fix |
+|---|---|---|
+| `DT_NOT_RUNNING` | Tutti i tool falliscono all'avvio | DEVONthink non è in esecuzione — avvialo (Spotlight: `DEVONthink`) |
+| `PERMISSION_DENIED` (`-1743`) | Errore al primo Apple Event | **System Settings → Privacy & Security → Automation** → abilita il check verso `DEVONthink` per il terminale o per Claude Desktop |
+| `DATABASE_NOT_FOUND` | `file_document` o `bulk_apply` rifiuta il path | `destination_hint` senza prefix database — usa `/Inbox/<group>` (con leading slash), non `/<group>` |
+| `uv binary not found` | Bundle `.mcpb` non parte al primo run | `brew install uv` (oppure `curl -LsSf https://astral.sh/uv/install.sh \| sh`), poi disable + enable l'extension in Claude Desktop |
+| `drift_detected: true` (su undo) | Undo rifiuta il rollback | Il record è stato modificato dopo l'apply originale. Usa `istefox-dt-mcp audit list --recent` per vedere il contesto, poi `--force` se sei sicuro che il rollback sia ancora desiderato |
+
+Per errori non listati: `uv run istefox-dt-mcp doctor` produce un report diagnostico completo (DT in esecuzione, permessi, cache, RAG).
+
+---
+
 ## Stato
 
 **MVP completo + estensioni W8-W11**: 6 tool MCP operativi end-to-end, validati in Claude Desktop con dati reali (v0.0.20). 137 test unit verdi. Bundle `.mcpb` distribuibile. Audit log + undo selettivo funzionanti.
@@ -213,35 +343,20 @@ automatico (launchd)".
 
 ---
 
-## Integrazione Claude Desktop
+## Integrazione Claude Desktop (dev)
 
-### Opzione A — `.mcpb` desktop extension (consigliata, W11)
+Per gli utenti finali vedi [Quick Install](#quick-install-3-strade). Questa sezione copre il workflow dev (build del bundle e config manuale per source install).
+
+**Build del bundle `.mcpb`** (richiede solo `bash + zip + unzip`):
 
 ```bash
-# Build del bundle (richiede solo: bash + zip + unzip)
 ./scripts/build_mcpb.sh
 # Output: dist/istefox-dt-mcp-<version>.mcpb (~270 KB)
 ```
 
-Poi in Claude Desktop:
+Il bundle usa `server.type=uv`: Claude Desktop gestisce il lifecycle Python + `uv sync` al primo avvio.
 
-1. **Settings → Developer → Install Bundle** → seleziona il `.mcpb`
-2. Oppure trascina il file `.mcpb` sulla finestra di Claude Desktop
-
-Claude Desktop si occupa di Python + `uv sync` automaticamente al primo
-avvio. Il bundle usa `server.type=uv`: la host application possiede
-il lifecycle del runtime, l'utente non deve installare dipendenze.
-
-**Permessi macOS Automation**: alla prima invocazione di un tool che
-parla con DEVONthink (es. `list_databases`), macOS mostrerà il dialog
-di consenso "Claude wants to control DEVONthink". Cliccare **OK**.
-Se non viene mostrato (consenso negato in passato), abilita
-manualmente in *System Settings → Privacy & Security → Automation →
-Claude → DEVONthink*.
-
-### Opzione B — config manuale `claude_desktop_config.json`
-
-Per workflow di sviluppo senza build del bundle:
+**Config manuale `claude_desktop_config.json` (source install)**:
 
 ```json
 {
@@ -254,15 +369,9 @@ Per workflow di sviluppo senza build del bundle:
 }
 ```
 
-Path: `~/Library/Application Support/Claude/claude_desktop_config.json`.
-Riavvia Claude Desktop. Tutti i 6 tool (`list_databases`, `search`,
-`find_related`, `ask_database`, `file_document`, `bulk_apply`) sono
-disponibili.
+Path: `~/Library/Application Support/Claude/claude_desktop_config.json`. Riavvia Claude Desktop. Tutti i 6 tool sono disponibili.
 
-> RAG e altre opzioni: per ora si configurano via env var nel
-> processo che lancia `claude` (Opzione B) o restano sui default per
-> il bundle (Opzione A — `user_config` integration arriva in una
-> iterazione futura).
+> RAG e altre opzioni: via env var nel processo che lancia `claude` (config manuale) o via UI **Settings → Extensions → Configure** per il bundle (dalla v0.0.22).
 
 ---
 
@@ -277,6 +386,10 @@ disponibili.
 | [`docs/adr/`](docs/adr/) | 7 ADR consolidati (stack, bridge, sidecar, MVP, test, DT4, ecc.) |
 | [`docs/adr/REVIEW_ADR.md`](docs/adr/REVIEW_ADR.md) | Architecture review v1.0 (input degli ADR formali) |
 | `ARCH-BRIEF-DT-MCP.md` | Brief architetturale v0.1 (fonte di verità storica) |
+
+<!-- TODO before 0.1.0 tag:
+     - docs/assets/architecture.svg posizionata qui (diagramma a layer della soluzione)
+-->
 
 ---
 
