@@ -6,9 +6,47 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 ## [Unreleased]
 
 ### Added
-- (W7+) `bulk_apply` (schema già pronto, impl post-MVP)
 - (W9) Test strategy completa Tier 2-4 — `ADR-005`
 - (W11) Packaging `pipx` + `.mcpb`
+- (post-MVP) Hard `confirm_token` enforcement con TTL
+- (post-MVP) After-state esplicito nell'audit log
+- (post-MVP) Multi-step undo (chain audit_ids)
+- (post-MVP) ADR-008 model selection benchmark MiniLM vs bge-m3
+
+---
+
+## [0.0.8] — 2026-05-01 — W8: bulk_apply tool
+
+### Added
+- **`bulk_apply` MCP tool** (write batch, dry-run by default):
+  - **Preview-then-apply** flow uguale a `file_document`:
+    `dry_run=true` ritorna `BulkApplyResult` con `outcomes` (status
+    `planned`/`failed`) + `preview_token` (audit_id). `dry_run=false`
+    + `confirm_token=<token>` esegue gli op in ordine.
+  - **Op supportati**: `add_tag` (payload `{tag}`), `remove_tag`
+    (payload `{tag}`), `move` (payload `{destination}`).
+  - **Failure semantics**: DEVONthink non ha transactions, quindi
+    no auto-rollback. Default `stop_on_first_error=true` —
+    halt al primo errore, `failed_index` riporta l'op fallita,
+    `outcomes` riporta status per-op (`applied`/`failed`/`planned`).
+    Con `stop_on_first_error=false` continua sugli errori.
+  - **Limite batch**: max 500 op per chiamata.
+  - **Validation pre-adapter**: op type sconosciuto o payload mancante
+    diventano `failed` con `INVALID_INPUT` senza chiamare l'adapter.
+  - **Audit `before_state`**: snapshot della lista ops con
+    `{uuid, op, payload}` (no per-op record snapshot — bilanciamento
+    spazio/utilità; selective undo per-op è post-MVP).
+- **Schema esteso**: `BulkOpOutcome` (index, record_uuid, op, status,
+  error_code, error_message), `BulkApplyResult.outcomes: list[...]`.
+
+### Changed
+- Server registra ora **6 MCP tool** (era 5): aggiunto `bulk_apply`.
+- `BulkApplyInput` docstring riformulato: rimossa promessa di
+  rollback atomico (non implementabile su DT4).
+
+### Verified
+- 121 test unit pass (112 W7 + 9 nuovi `test_bulk_apply.py`)
+- mypy strict + ruff + black puliti
 
 ---
 

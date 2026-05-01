@@ -10,7 +10,7 @@ MCP server per DEVONthink 4 — outcome-oriented tools, RAG locale, production-g
 
 Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dictionary.
 
-**MVP (5 tool, sequenza implementazione W1-W7)**:
+**MVP (5 tool, sequenza implementazione W1-W7)** + estensioni post-MVP:
 
 | Tool | Tipo | Stato | Settimana |
 |---|---|---|---|
@@ -19,14 +19,15 @@ Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dict
 | `find_related` | read (See Also/Compare) | ✅ implementato | W1-W2 |
 | `ask_database` | read (vector + BM25 fallback) | ✅ implementato | W3, vector W5 |
 | `file_document` | write con `dry_run` + undo | ✅ implementato | W7 |
+| `bulk_apply` | write batch con `dry_run` (post-MVP) | ✅ implementato | W8 |
 
-**MVP completo**: tutti e 5 i tool MCP target sono operativi end-to-end.
-Il `file_document` segue il pattern preview-then-apply: chiamarlo con
+**MVP completo + estensione W8**: 6 tool MCP operativi end-to-end.
+I tool write seguono il pattern preview-then-apply: chiamarli con
 `dry_run=true` ritorna un preview + `preview_token` (audit_id), poi
 con `dry_run=false` + `confirm_token=<preview_token>` viene applicato
 e l'`audit_id` permette `undo` selettivo via CLI.
 
-Esclusi da MVP (post-W7): `summarize_topic`, `bulk_apply`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
+Esclusi da MVP (post-W8): `summarize_topic`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
 
 ---
 

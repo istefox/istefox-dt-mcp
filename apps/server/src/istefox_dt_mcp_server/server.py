@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 
 from .deps import build_default_deps
 from .tools import ask_database as tool_ask_database
+from .tools import bulk_apply as tool_bulk_apply
 from .tools import file_document as tool_file_document
 from .tools import find_related as tool_find_related
 from .tools import list_databases as tool_list_databases
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from .deps import Deps
 
 SERVER_NAME = "istefox-dt-mcp"
-SERVER_VERSION = "0.0.1"
+SERVER_VERSION = "0.0.8"
 
 
 SERVER_INSTRUCTIONS = """\
@@ -51,5 +52,6 @@ def build_server(deps: Deps | None = None) -> FastMCP:
     tool_find_related.register(mcp, deps)
     tool_ask_database.register(mcp, deps)
     tool_file_document.register(mcp, deps)
+    tool_bulk_apply.register(mcp, deps)
 
     return mcp
