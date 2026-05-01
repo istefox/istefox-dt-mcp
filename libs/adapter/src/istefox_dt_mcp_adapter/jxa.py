@@ -33,6 +33,7 @@ from istefox_dt_mcp_schemas.common import (
 from .contract import DEVONthinkAdapter
 from .errors import (
     AdapterError,
+    AutomationPermissionError,
     DatabaseNotFoundError,
     DTNotRunningError,
     DTVersionIncompatibleError,
@@ -60,6 +61,39 @@ def _version_tuple(s: str) -> tuple[int, ...]:
 
 def _version_gte(detected: str, required: tuple[int, ...]) -> bool:
     return _version_tuple(detected) >= required
+
+
+def _detect_caller_app() -> str:
+    """Best-effort detection of the GUI app that ultimately spawned us.
+
+    Walks the parent process chain looking for a `.app` bundle (Warp,
+    iTerm, Terminal, Claude, ...). Used only to enrich the recovery
+    hint shown to the user when macOS denies Apple Events.
+    """
+    import os
+    import subprocess
+
+    pid = os.getppid()
+    for _ in range(12):
+        try:
+            out = subprocess.check_output(
+                ["ps", "-p", str(pid), "-o", "ppid=,comm="],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except subprocess.CalledProcessError:
+            break
+        parts = out.split(maxsplit=1)
+        if len(parts) != 2:
+            break
+        ppid_s, comm = parts
+        if ".app/" in comm:
+            name = comm.split(".app/")[0].rsplit("/", 1)[-1]
+            return name
+        if ppid_s in {"0", "1"}:
+            break
+        pid = int(ppid_s)
+    return ""
 
 
 class JXAAdapter(DEVONthinkAdapter):
@@ -322,6 +356,10 @@ class JXAAdapter(DEVONthinkAdapter):
         if proc.returncode != 0:
             if "Application isn't running" in stderr:
                 raise DTNotRunningError(audit_id=audit_id)
+            if "(-1743)" in stderr or "Not authorized" in stderr:
+                raise AutomationPermissionError(
+                    caller_hint=_detect_caller_app(), audit_id=audit_id
+                )
             raise JXAError(
                 f"osascript exit {proc.returncode}",
                 stderr=stderr,

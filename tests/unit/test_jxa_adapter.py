@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from istefox_dt_mcp_adapter.errors import (
+    AutomationPermissionError,
     DTNotRunningError,
     JXAError,
     JXAParseError,
@@ -65,6 +66,20 @@ async def test_app_isnt_running_raises_dt_not_running() -> None:
         pytest.raises(DTNotRunningError),
     ):
         await adapter._jxa_inline("anything")
+
+
+@pytest.mark.asyncio
+async def test_minus_1743_raises_automation_permission_error() -> None:
+    adapter = JXAAdapter(pool_size=1, timeout_s=2.0, max_retries=1)
+    stderr = b"execution error: Error: Si e' verificato un errore. (-1743)"
+    with (
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_mock_proc(stderr=stderr, returncode=1)),
+        ),
+        pytest.raises(AutomationPermissionError),
+    ):
+        await adapter._jxa_inline("expr")
 
 
 @pytest.mark.asyncio
