@@ -104,7 +104,9 @@ Numeri reali (run 2026-05-01 11:34 dal Mac di Stefano):
 - `find_related` (cold): mean 1037ms p95 1088ms — sotto nuovo target
 - `list_databases`: 0ms (cached) — cold ~200ms
 
-Verdetto W2 GO/NO-GO: **PASS** (atteso) con threshold differenziati.
+Verdetto W2 GO/NO-GO: **PASS ✓** confermato (run 2026-05-01 11:38).
+Fast ops p95 = 487ms (target < 500ms). Compare ops p95 = 1009ms
+(target < 1500ms). Cache find_related riduce iter 2-N warm a ~0ms.
 
 ---
 
