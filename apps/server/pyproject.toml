@@ -9,8 +9,10 @@ authors = [{ name = "Stefano Ferri", email = "stefano@stefer.it" }]
 
 dependencies = [
     # MCP framework + validation
-    "fastmcp>=0.2",
+    "fastmcp>=3.2",
     "pydantic>=2.7",
+    # CLI
+    "click>=8.1",
     # Logging / observability
     "structlog>=24.1",
     "opentelemetry-sdk>=1.25",
@@ -38,3 +40,6 @@ istefox-dt-mcp-schemas = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/istefox_dt_mcp_server"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/istefox_dt_mcp_server/locales/it.toml" = "istefox_dt_mcp_server/locales/it.toml"

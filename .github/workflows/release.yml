@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver tag (e.g. 0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Placeholder — wired in W11 per ADR roadmap.
+    # Will produce: pipx wheel + .mcpb desktop extension.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stub
+        run: echo "Release pipeline stub — implementation in W11."
