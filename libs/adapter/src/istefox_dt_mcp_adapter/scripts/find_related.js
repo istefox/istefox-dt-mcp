@@ -49,10 +49,13 @@ function run(argv) {
     if (!r) continue;
     var ru = safeStr(function() { return r.uuid(); });
     if (!ru) continue;
+    // DT compare() includes the seed itself in results — skip it.
+    if (ru === uuid) continue;
     result.push({
       uuid: ru,
       name: safeStr(function() { return r.name(); }),
-      similarity: null,
+      // DT4 may expose .score() on compare results; fall back to null.
+      similarity: safe(function() { return r.score(); }, null),
       location: safeStr(function() { return r.location(); }),
       reference_url: safeStr(function() { return r.referenceUrl(); })
     });
