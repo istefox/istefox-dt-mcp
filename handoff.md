@@ -79,6 +79,30 @@
 
 ---
 
+## W10 status (2026-05-01) — after_state esplicito nell'audit log
+
+W10 chiuso (post-MVP hardening dell'undo):
+- `AuditEntry.after_state` schema field nuovo.
+- Tabella `audit_after_state` append-only (PK su audit_id, triggers
+  come `audit_log` / `preview_consumption`). `audit_log` resta puro.
+- `AuditLog.set_after_state(audit_id, state)` one-shot, ritorna False
+  su PK collision.
+- `file_document` e `bulk_apply` popolano after_state post-apply
+  riuscita. `file_document` ricostruisce dal preview senza refetch.
+- `undo_audit` ora usa after_state per drift detection precisa.
+  Fallback all'euristica legacy se after_state mancante.
+- 132 test pass (era 127, +5).
+- CHANGELOG v0.0.10. Server bumped a 0.0.10.
+
+**Pendenze post-MVP residue**:
+- Multi-step undo (chain audit_ids per `bulk_apply`)
+- ADR-008 model selection benchmark
+- HTTP transport + OAuth (W8+ originale, deferred a v2)
+- Test strategy Tier 2-4 (W9 originale)
+- Packaging `.mcpb` (W11)
+
+---
+
 ## W9 status (2026-05-01) — hard preview_token enforcement
 
 W9 chiuso in giornata (post-MVP hardening):

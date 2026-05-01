@@ -1,15 +1,18 @@
 """Selective undo of a previously applied write op.
 
-Looks up the audit_id, reads `before_state`, and reverses the write
-in the most surgical way possible. v0.0.7 supports `file_document`
-only (the sole write tool we ship). `bulk_apply` undo lands when
-`bulk_apply` itself does, post-MVP.
+Looks up the audit_id, reads `before_state` (the original record
+snapshot) and `after_state` (the snapshot we expected immediately
+after the write), and reverses the write surgically. v0.0.7 supports
+`file_document` only.
 
-Drift detection: we compare the current record state against
-`before_state`. If the location or tags have changed since the
-original write (e.g. another op or the user moved/edited the record
-in DT), we report `drift_detected=True` and refuse to revert
-unless `--force` is passed at the CLI.
+Drift detection (v0.0.10+):
+- If `after_state` is present in the audit entry, drift = the current
+  DT state diverges from after_state. This is the precise check.
+- If `after_state` is missing (legacy entries pre-W10), fall back to
+  the heuristic that compares current.location against the original
+  destination_hint.
+
+`drift_detected=True` blocks the revert unless `force=True`.
 """
 
 from __future__ import annotations
@@ -91,26 +94,28 @@ async def undo_audit(
             "dry_run": dry_run,
         }
 
-    # Reconstruct the after-state implied by the audit entry input
     input_data = entry.input_json or {}
-    # The applied location can be inferred from current vs before;
-    # we don't store the after-state explicitly (next iteration).
     before_location = str(entry.before_state.get("location") or "")
     before_tags: list[str] = list(entry.before_state.get("tags") or [])
 
-    # Tags added during the original op = current minus before
-    tags_added = [t for t in current.tags if t not in before_tags]
-
-    drift_detected = False
-    if current.location != before_location and not _is_first_undo(
-        current.location, input_data
-    ):
-        # Hard to tell apart "the user moved it manually" vs "this is
-        # the after-state we expected". For v0.0.7 we treat any move
-        # away from `before_location` AND a location that doesn't
-        # match the destination_hint/classify suggestion as drift.
-        # The conservative path is to require --force.
-        drift_detected = True
+    # Compute tags to remove and drift status. With after_state
+    # available (W10+) we know exactly what the op produced and can
+    # tell apart "user changed it" from "this is what we applied".
+    if entry.after_state is not None:
+        after_location = str(entry.after_state.get("location") or "")
+        after_tags = set(entry.after_state.get("tags") or [])
+        tags_added = sorted(after_tags - set(before_tags))
+        drift_detected = (
+            current.location != after_location or set(current.tags) != after_tags
+        )
+    else:
+        # Legacy fallback (pre-W10 audit entries): infer tags added
+        # from current minus before, and check drift by comparing the
+        # current location to the original destination_hint.
+        tags_added = [t for t in current.tags if t not in before_tags]
+        drift_detected = current.location != before_location and not _is_first_undo(
+            current.location, input_data
+        )
 
     if drift_detected and not force:
         return {
