@@ -79,6 +79,30 @@
 
 ---
 
+## ChromaDB stress spike — ADR-003 PASS (2026-05-01)
+
+Spike preventivo richiesto da ADR-003 §"Spike preventivo" eseguito
+con esito **PASS con margine ~60x sulla latenza**:
+
+| Metric | Misurato | Target | Margine |
+|---|---|---|---|
+| Query p95 | 5.5 ms | < 300 ms | 60x |
+| Memory peak | 1147 MB | < 3000 MB | 38% del budget |
+| Throughput query | 101.2 q/s | 100 q/s | over target |
+| Errori (30K query + 3K write) | 0 | 0 | clean |
+
+Setup: 50K record sintetici, 5 min sustained load, 8 query worker +
+10 write/s. Modello `paraphrase-multilingual-MiniLM-L12-v2` (proxy
+veloce per validare ChromaDB; `bge-m3` da ri-misurare in W5 con
+delta atteso solo su encoding).
+
+Report completo: [`docs/spikes/2026-05-01-chromadb-stress-test.md`](docs/spikes/2026-05-01-chromadb-stress-test.md).
+
+**Conseguenza**: ADR-003 confermato. W5 può partire senza dubbi
+architetturali — `ChromaRAGProvider` same-process è la scelta giusta.
+
+---
+
 ## W4 status (2026-05-01)
 
 W4 chiuso in giornata. Aggiunto:
