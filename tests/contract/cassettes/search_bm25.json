@@ -1,0 +1,5 @@
+{
+  "script": "search_bm25.js",
+  "argv": ["antivibranti", "10", "[]", "[]"],
+  "stdout": "[{\"uuid\":\"REC-SRCH-001-AAAA-BBBBCCCCDDDD\",\"name\":\"Catalogo antivibranti 2026\",\"location\":\"/privato/cataloghi/\",\"reference_url\":\"x-devonthink-item://REC-SRCH-001-AAAA-BBBBCCCCDDDD\",\"score\":0.91,\"snippet\":null},{\"uuid\":\"REC-SRCH-002-AAAA-BBBBCCCCDDDD\",\"name\":\"Note tecniche supporti antivibranti\",\"location\":\"/privato/note/tecniche/\",\"reference_url\":\"x-devonthink-item://REC-SRCH-002-AAAA-BBBBCCCCDDDD\",\"score\":0.78,\"snippet\":null},{\"uuid\":\"REC-SRCH-003-AAAA-BBBBCCCCDDDD\",\"name\":\"Email cliente — antivibranti custom\",\"location\":\"/Inbox/\",\"reference_url\":\"x-devonthink-item://REC-SRCH-003-AAAA-BBBBCCCCDDDD\",\"score\":0.62,\"snippet\":null}]"
+}

@@ -75,8 +75,12 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests", "apps", "libs"]
-# Default session skips benchmarks; run them with `pytest tests/benchmark`
-addopts = "-v --strict-markers --benchmark-disable --ignore=tests/benchmark"
+# Default session skips benchmarks AND integration tests.
+# - Benchmarks: `pytest tests/benchmark`
+# - Integration: `pytest tests/integration -m integration` (requires DT running)
+addopts = "-v --strict-markers --benchmark-disable --ignore=tests/benchmark -m 'not integration'"
 markers = [
     "benchmark: pytest-benchmark micro-benchmarks (opt-in)",
+    "contract: VCR-style replay tests against captured JXA outputs",
+    "integration: tests requiring DEVONthink running (skip default)",
 ]
