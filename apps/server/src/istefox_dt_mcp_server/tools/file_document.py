@@ -131,25 +131,35 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         if result.success and result.data is not None and result.audit_id is not None:
             result.data.preview_token = str(result.audit_id)
             # Persist after_state for successful apply, so undo can do
-            # precise drift detection. The preview holds the planned
-            # delta vs the original record, which is sufficient to
-            # reconstruct the post-apply snapshot without a refetch.
+            # precise drift detection. We REFETCH the record here
+            # (rather than reconstructing from before_state + preview)
+            # because DT exposes record.location relative to the
+            # database (e.g. "/MCP-Test/"), while destination_hint is
+            # absolute including the database prefix
+            # ("/Inbox/MCP-Test"). Storing the input would mismatch
+            # what undo sees on subsequent get_record calls and
+            # trigger a false drift_detected. One extra get_record is
+            # cheap (~150ms warm) and worth the precision.
             if result.data.applied:
-                preview = result.data.preview
-                applied_location = preview.destination_group or before_state["location"]
-                applied_tags = sorted(
-                    (set(before_state["tags"]) | set(preview.tags_to_add))
-                    - set(preview.tags_to_remove)
-                )
-                deps.audit.set_after_state(
-                    result.audit_id,
-                    {
-                        "uuid": before_state["uuid"],
-                        "location": applied_location,
-                        "tags": applied_tags,
-                        "name": before_state["name"],
-                    },
-                )
+                try:
+                    record_after = await deps.adapter.get_record(input.record_uuid)
+                    deps.audit.set_after_state(
+                        result.audit_id,
+                        {
+                            "uuid": record_after.uuid,
+                            "location": record_after.location,
+                            "tags": sorted(record_after.tags),
+                            "name": record_after.name,
+                        },
+                    )
+                except Exception as e:
+                    # Don't fail the whole call if the refetch errors;
+                    # undo will fall back to the heuristic drift check.
+                    log.debug(
+                        "file_document_after_state_refetch_failed",
+                        uuid=input.record_uuid,
+                        error=str(e),
+                    )
         return result
 
 
