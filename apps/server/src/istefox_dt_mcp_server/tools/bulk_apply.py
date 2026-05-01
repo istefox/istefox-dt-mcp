@@ -8,6 +8,10 @@ Same two-phase contract as `file_document`:
    execute the ops in order. On failure, behavior depends on
    `stop_on_first_error` (default true).
 
+Since v0.0.9 the `confirm_token` is hard-enforced (TTL 5min default,
+one-shot, must point to a previous dry_run of bulk_apply). Override
+TTL via `ISTEFOX_PREVIEW_TTL_S` env var.
+
 Failure model: DEVONthink has no transactions, so we cannot
 auto-rollback already-applied ops. With `stop_on_first_error=true`
 the batch halts at the first failure; outcomes report exactly which
@@ -22,7 +26,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import structlog
 from istefox_dt_mcp_adapter.errors import AdapterError
 from istefox_dt_mcp_schemas.tools import (
     BulkApplyInput,
@@ -32,15 +35,13 @@ from istefox_dt_mcp_schemas.tools import (
     BulkOpOutcome,
 )
 
-from ._common import safe_call
+from ._common import safe_call, validate_confirm_token
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
     from ..deps import Deps
 
-
-log = structlog.get_logger(__name__)
 
 _VALID_OPS = frozenset({"add_tag", "remove_tag", "move"})
 
@@ -65,11 +66,13 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                     outcomes=outcomes,
                 )
 
-            if not input.confirm_token:
-                log.warning(
-                    "bulk_apply_apply_without_confirm_token",
-                    n_ops=len(input.operations),
-                )
+            # Hard enforcement: apply requires a valid, non-expired,
+            # unconsumed preview_token. Raises (caught by safe_call).
+            validate_confirm_token(
+                deps,
+                tool_name="bulk_apply",
+                confirm_token=input.confirm_token,
+            )
 
             # Apply phase: dispatch each op
             applied = 0

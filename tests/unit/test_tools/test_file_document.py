@@ -132,8 +132,15 @@ async def test_apply_calls_move_and_tag(deps: Deps, mock_adapter: AsyncMock) -> 
     )
 
     fn = _register_file_document_and_get_callable(deps)
+
+    # Step 1: dry_run to obtain a valid preview_token
+    preview_out = await fn(FileDocumentInput(record_uuid="u", dry_run=True))
+    token = preview_out.data.preview_token
+    assert token is not None
+
+    # Step 2: apply with the real token
     out = await fn(
-        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token="prev-audit-id")
+        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token=token)
     )
 
     assert out.success is True
@@ -145,18 +152,104 @@ async def test_apply_calls_move_and_tag(deps: Deps, mock_adapter: AsyncMock) -> 
 
 
 @pytest.mark.asyncio
-async def test_apply_without_confirm_token_logs_warning_but_proceeds(
-    deps: Deps, mock_adapter: AsyncMock, caplog
+async def test_apply_without_confirm_token_is_rejected(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """Hard enforcement (v0.0.9): missing token → INVALID_PREVIEW_TOKEN."""
+    mock_adapter.get_record.return_value = _record(location="/Inbox", tags=[])
+    mock_adapter.classify_record.return_value = []
+    fn = _register_file_document_and_get_callable(deps)
+    out = await fn(FileDocumentInput(record_uuid="u", dry_run=False))
+    assert out.success is False
+    assert out.error_code == "INVALID_PREVIEW_TOKEN"
+    mock_adapter.move_record.assert_not_awaited()
+    mock_adapter.apply_tag.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_apply_with_garbage_token_is_rejected(
+    deps: Deps, mock_adapter: AsyncMock
 ) -> None:
     mock_adapter.get_record.return_value = _record(location="/Inbox", tags=[])
-    mock_adapter.classify_record.return_value = []  # no destination
+    mock_adapter.classify_record.return_value = []
     fn = _register_file_document_and_get_callable(deps)
     out = await fn(
-        FileDocumentInput(record_uuid="u", dry_run=False)  # no confirm_token
+        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token="not-a-uuid")
     )
-    assert out.success is True
-    # No move/tag because preview is empty, but no exception either
+    assert out.success is False
+    assert out.error_code == "INVALID_PREVIEW_TOKEN"
     mock_adapter.move_record.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_apply_consumed_token_is_rejected_on_replay(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """A token can be used exactly once."""
+    mock_adapter.get_record.return_value = _record(location="/Inbox", tags=[])
+    mock_adapter.classify_record.return_value = [
+        ClassifySuggestion(location="/Business/X", score=0.8)
+    ]
+    fn = _register_file_document_and_get_callable(deps)
+    preview = await fn(FileDocumentInput(record_uuid="u", dry_run=True))
+    token = preview.data.preview_token
+
+    first = await fn(
+        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token=token)
+    )
+    assert first.success is True
+    assert first.data.applied is True
+
+    second = await fn(
+        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token=token)
+    )
+    assert second.success is False
+    assert second.error_code == "CONSUMED_PREVIEW_TOKEN"
+
+
+@pytest.mark.asyncio
+async def test_apply_with_other_tools_token_is_rejected(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """A bulk_apply preview_token cannot be used to apply file_document."""
+    mock_adapter.get_record.return_value = _record(location="/Inbox", tags=[])
+    mock_adapter.classify_record.return_value = []
+    # Inject an audit entry from a different tool, marked as a dry_run
+    foreign_id = deps.audit.append(
+        tool_name="bulk_apply",
+        input_data={"dry_run": True, "operations": []},
+        output_data=None,
+        duration_ms=1.0,
+    )
+    fn = _register_file_document_and_get_callable(deps)
+    out = await fn(
+        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token=str(foreign_id))
+    )
+    assert out.success is False
+    assert out.error_code == "INVALID_PREVIEW_TOKEN"
+
+
+@pytest.mark.asyncio
+async def test_apply_with_expired_token_is_rejected(
+    deps: Deps, mock_adapter: AsyncMock, monkeypatch
+) -> None:
+    """Tokens older than TTL are rejected."""
+    monkeypatch.setenv("ISTEFOX_PREVIEW_TTL_S", "1")  # 1 second
+    mock_adapter.get_record.return_value = _record(location="/Inbox", tags=[])
+    mock_adapter.classify_record.return_value = []
+    fn = _register_file_document_and_get_callable(deps)
+    preview = await fn(FileDocumentInput(record_uuid="u", dry_run=True))
+    token = preview.data.preview_token
+
+    import time
+
+    time.sleep(1.2)
+
+    out = await fn(
+        FileDocumentInput(record_uuid="u", dry_run=False, confirm_token=token)
+    )
+    assert out.success is False
+    assert out.error_code == "EXPIRED_PREVIEW_TOKEN"
 
 
 @pytest.mark.asyncio
