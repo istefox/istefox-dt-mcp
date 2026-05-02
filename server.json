@@ -1,0 +1,48 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.istefox/dt-mcp",
+  "description": "MCP server for DEVONthink 4 — outcome-oriented tools (search, find_related, ask_database, file_document, bulk_apply), preview-then-apply with confirm_token, append-only audit log + selective undo. Privacy-first: everything local, no telemetry. Optional RAG via embedded ChromaDB.",
+  "title": "DEVONthink MCP (istefox)",
+  "websiteUrl": "https://github.com/istefox/istefox-dt-mcp",
+  "repository": {
+    "url": "https://github.com/istefox/istefox-dt-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/istefox/istefox-dt-mcp/releases/download/v0.1.0/istefox-dt-mcp-0.1.0.mcpb",
+      "fileSha256": "30e3327c00ed3f9499880cbc1e474c8255f8f6139219496bea2d1f52a07ac853",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ISTEFOX_FAST_LIST_DATABASES",
+          "description": "Set to '1' to skip recursive record_count when listing databases. Useful for databases with tens of thousands of records where the first call would otherwise take several seconds.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "ISTEFOX_PREVIEW_TTL_S",
+          "description": "Override TTL in seconds for preview_token returned by file_document/bulk_apply dry_run (default 300, range 1-3600).",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "ISTEFOX_RAG_ENABLED",
+          "description": "Set to '1' to enable embedded ChromaDB vector retrieval for ask_database and search (mode=hybrid). EXPERIMENTAL in 0.1.0; embedding model not yet benchmarked cross-corpus (see ADR-008).",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "ISTEFOX_RAG_MODEL",
+          "description": "sentence-transformers model name used by the RAG provider. Default paraphrase-multilingual-MiniLM-L12-v2 (~120MB). Override examples: BAAI/bge-m3 (~2.2GB).",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
