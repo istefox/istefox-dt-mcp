@@ -60,7 +60,6 @@ See [Setup](#setup) for full details (macOS permissions, install troubleshooting
 <!-- TODO before next release:
      - docs/assets/install.gif (Claude Desktop install of .mcpb, ~5s loop, ≤5MB)
      - docs/assets/demo.gif (chat → file_document preview → apply → undo, ~15s)
-     - docs/assets/architecture.svg (layered architecture diagram)
      Capture: kap.app or Gifox; optimize: gifsicle -O3
 -->
 
@@ -378,9 +377,7 @@ Path: `~/Library/Application Support/Claude/claude_desktop_config.json`. Restart
 | [`docs/adr/REVIEW_ADR.md`](docs/adr/REVIEW_ADR.md) | Architecture review v1.0 (input to the formal ADRs) |
 | [`ARCH-BRIEF-DT-MCP.md`](ARCH-BRIEF-DT-MCP.md) | Original architecture brief v0.1 (historical source of truth) |
 
-<!-- TODO before next release:
-     - docs/assets/architecture.svg belongs here (layered diagram of the solution)
--->
+![Architecture diagram of istefox-dt-mcp: MCP clients → FastMCP server → JXA adapter → DEVONthink 4, with optional RAG sidecar](docs/assets/architecture.svg)
 
 ---
 

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 920 720"
+     width="920" height="720"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+     aria-labelledby="title desc"
+     role="img">
+  <title id="title">istefox-dt-mcp — Layered architecture</title>
+  <desc id="desc">Diagram of the istefox-dt-mcp connector. MCP clients call the FastMCP server over stdio; the server registers six tools backed by an adapter that talks to DEVONthink 4 via JXA subprocess. Optional RAG sidecar with ChromaDB. Audit log SQLite append-only on the side.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7d8590" />
+    </marker>
+    <marker id="arrow-dashed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#bf8700" />
+    </marker>
+  </defs>
+
+  <style>
+    .box { fill: none; stroke: #7d8590; stroke-width: 1.5; rx: 6; ry: 6; }
+    .box-accent { fill: none; stroke: #f97316; stroke-width: 1.5; stroke-dasharray: 5 4; rx: 6; ry: 6; }
+    .layer { font-size: 13px; font-weight: 600; fill: #7d8590; letter-spacing: 0.04em; text-transform: uppercase; }
+    .name { font-size: 16px; font-weight: 600; fill: #0d1117; }
+    .name-dark { font-size: 16px; font-weight: 600; fill: #c9d1d9; }
+    .detail { font-size: 12px; fill: #57606a; }
+    .accent-text { font-size: 12px; fill: #bf8700; font-style: italic; }
+    .conn { stroke: #7d8590; stroke-width: 1.5; fill: none; }
+    .conn-accent { stroke: #bf8700; stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+    .label { font-size: 11px; fill: #57606a; font-style: italic; }
+  </style>
+
+  <!-- Title -->
+  <text x="460" y="30" text-anchor="middle" font-size="18" font-weight="700" fill="#0d1117">istefox-dt-mcp — Architecture</text>
+  <text x="460" y="50" text-anchor="middle" font-size="12" fill="#57606a">macOS · stdio MCP · JXA bridge to DEVONthink 4 · MIT</text>
+
+  <!-- Layer 1: MCP Clients -->
+  <text x="40" y="90" class="layer">MCP CLIENTS</text>
+  <rect class="box" x="40" y="100" width="240" height="56" />
+  <text x="160" y="124" text-anchor="middle" class="name">Claude Desktop</text>
+  <text x="160" y="142" text-anchor="middle" class="detail">.mcpb desktop extension</text>
+
+  <rect class="box" x="300" y="100" width="240" height="56" />
+  <text x="420" y="124" text-anchor="middle" class="name">pipx CLI</text>
+  <text x="420" y="142" text-anchor="middle" class="detail">claude_desktop_config.json</text>
+
+  <rect class="box" x="560" y="100" width="240" height="56" />
+  <text x="680" y="124" text-anchor="middle" class="name">Other MCP hosts</text>
+  <text x="680" y="142" text-anchor="middle" class="detail">any stdio JSON-RPC client</text>
+
+  <!-- Arrows down to MCP transport -->
+  <line class="conn" x1="160" y1="160" x2="160" y2="195" marker-end="url(#arrow)" />
+  <line class="conn" x1="420" y1="160" x2="420" y2="195" marker-end="url(#arrow)" />
+  <line class="conn" x1="680" y1="160" x2="680" y2="195" marker-end="url(#arrow)" />
+
+  <!-- Transport label -->
+  <text x="460" y="185" text-anchor="middle" class="label">MCP stdio · JSON-RPC 2.0</text>
+
+  <!-- Layer 2: MCP Server -->
+  <text x="40" y="220" class="layer">MCP SERVER · apps/server</text>
+  <rect class="box" x="40" y="230" width="760" height="180" />
+  <text x="60" y="255" class="name">FastMCP server</text>
+  <text x="60" y="273" class="detail">tool registration · structured logging (structlog) · i18n IT/EN errors</text>
+
+  <!-- Tools sub-box -->
+  <rect class="box" x="60" y="290" width="500" height="100" />
+  <text x="80" y="310" class="name" font-size="13">6 MCP tools</text>
+  <text x="80" y="332" class="detail">list_databases · search (BM25 + opt-in vector hybrid)</text>
+  <text x="80" y="350" class="detail">find_related · ask_database (BM25 + opt-in vector)</text>
+  <text x="80" y="368" class="detail">file_document · bulk_apply (preview-then-apply, dry_run by default)</text>
+  <text x="80" y="385" class="accent-text">write tools require confirm_token; safe_call wraps every call</text>
+
+  <!-- Audit + Undo -->
+  <rect class="box" x="580" y="290" width="200" height="46" />
+  <text x="680" y="310" text-anchor="middle" class="name" font-size="13">Audit Log</text>
+  <text x="680" y="328" text-anchor="middle" class="detail">SQLite append-only</text>
+
+  <rect class="box" x="580" y="346" width="200" height="44" />
+  <text x="680" y="366" text-anchor="middle" class="name" font-size="13">Undo CLI</text>
+  <text x="680" y="382" text-anchor="middle" class="detail">selective by audit_id</text>
+
+  <!-- Arrow down to adapter -->
+  <line class="conn" x1="420" y1="410" x2="420" y2="445" marker-end="url(#arrow)" />
+  <text x="430" y="430" class="label">async/await</text>
+
+  <!-- Layer 3: Adapter -->
+  <text x="40" y="465" class="layer">ADAPTER · libs/adapter</text>
+  <rect class="box" x="40" y="475" width="760" height="100" />
+  <text x="60" y="500" class="name">DEVONthinkAdapter (ABC) → JXAAdapter (v1)</text>
+  <text x="60" y="520" class="detail">async pool (semaphore=4) · per-script timeout · retry on transient · TCC error mapping</text>
+  <text x="60" y="540" class="detail">SQLite cache WAL · TTL per category (5min list_databases, 30s search, 5min get_record)</text>
+  <text x="60" y="560" class="detail">JXA scripts: defensive (safe() wrapper) · graceful null fallbacks for special record types</text>
+
+  <!-- Arrow down to DT -->
+  <line class="conn" x1="420" y1="575" x2="420" y2="610" marker-end="url(#arrow)" />
+  <text x="430" y="595" class="label">osascript -l JavaScript (subprocess)</text>
+
+  <!-- Layer 4: DEVONthink -->
+  <text x="40" y="630" class="layer">TARGET</text>
+  <rect class="box" x="40" y="640" width="760" height="56" />
+  <text x="420" y="665" text-anchor="middle" class="name">DEVONthink 4</text>
+  <text x="420" y="683" text-anchor="middle" class="detail">native AppleEvents · classify · search · groups · tags · See Also</text>
+
+  <!-- Right side: RAG sidecar (optional) -->
+  <text x="820" y="220" class="layer" text-anchor="start">OPTIONAL</text>
+  <rect class="box-accent" x="820" y="230" width="80" height="180" />
+  <text x="860" y="252" text-anchor="middle" class="name" font-size="12">RAG</text>
+  <text x="860" y="270" text-anchor="middle" class="name" font-size="12">sidecar</text>
+  <text x="860" y="290" text-anchor="middle" class="detail">apps/</text>
+  <text x="860" y="304" text-anchor="middle" class="detail">sidecar</text>
+  <text x="860" y="328" text-anchor="middle" class="detail">ChromaDB</text>
+  <text x="860" y="342" text-anchor="middle" class="detail">embedded</text>
+  <text x="860" y="362" text-anchor="middle" class="detail">sentence-</text>
+  <text x="860" y="376" text-anchor="middle" class="detail">transformers</text>
+  <text x="860" y="398" text-anchor="middle" class="accent-text">opt-in</text>
+
+  <!-- Connection from RAG to server (dashed, opt-in) -->
+  <path class="conn-accent" d="M 820 320 Q 805 320 805 320 L 800 320" marker-end="url(#arrow-dashed)" />
+  <text x="780" y="312" class="accent-text" text-anchor="end" font-size="10">ISTEFOX_RAG_ENABLED=1</text>
+
+  <!-- Schemas footer note -->
+  <line x1="40" y1="708" x2="900" y2="708" stroke="#d0d7de" stroke-width="0.5" />
+  <text x="460" y="716" text-anchor="middle" class="label">
+    Schemas (libs/schemas) — Pydantic v2 models shared by all layers (envelopes, errors, audit entries, tool I/O)
+  </text>
+</svg>
