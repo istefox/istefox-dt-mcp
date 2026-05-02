@@ -6,479 +6,166 @@
 
 ## Snapshot sessione corrente
 
-- **Data**: 2026-04-30
-- **Operatore**: Stefano Ferri + Claude Opus 4.7
-- **Output**: W1-W2 milestone completata (foundations + 3 tool read operativi + CI + docs)
+- **Data fine**: 2026-05-02
+- **Output principale**: **release pubblica 0.1.0** + presenza su MCP Registry + repo public + contributors history pulita
 
 ---
 
-## Cosa è stato fatto in questa sessione
+## Stato corrente del progetto (2026-05-02)
 
-### Setup operativo (Step 1)
-- Repo GitHub privato creato: https://github.com/istefox/istefox-dt-mcp
-- `git push -u origin main` fatto
-- `uv` 0.11.8 installato via brew
-- Workspace `uv sync --all-packages`: 169 packages, lockfile generato
+**Versione live**: `v0.1.0` (rilasciata 2026-05-02 07:06 UTC)
 
-### ADR formali (Step 2)
-- 5 ADR scritti in `docs/adr/`:
-  - `0002-bridge-architecture-jxa-only.md`
-  - `0003-rag-same-process.md`
-  - `0004-mvp-tool-scope.md` (sostituisce decisione precedente "3 read-only")
-  - `0005-test-strategy-4-tier.md`
-  - `0007-dt4-only.md`
+### Distribuzione
 
-### Bridge layer (Step 3 — `libs/adapter/`)
-- `contract.py` — `DEVONthinkAdapter` ABC
-- `jxa.py` — `JXAAdapter` con pool async (semaphore 4), retry exponential backoff, timeout 5s
-- `cache.py` — SQLite WAL cache con TTL
-- `errors.py` — tassonomia errori (`AdapterError` + 10 sotto-classi)
-- `scripts/*.js` — 6 template JXA (list, get, search, find_related, apply_tag, move)
+- **GitHub Releases**: https://github.com/istefox/istefox-dt-mcp/releases/tag/v0.1.0
+- **Bundle .mcpb**: `istefox-dt-mcp-0.1.0.mcpb` (293 KB, sha256 `ec0947840987071b6cf6ec445dcd8aeac62b5aba45530863fb1cbd9131a92bbb`)
+- **MCP Registry**: `io.github.istefox/dt-mcp` v0.1.0 (LIVE su `registry.modelcontextprotocol.io`)
+- **Repo**: https://github.com/istefox/istefox-dt-mcp — **PUBLIC**, MIT, 0 star/0 fork (appena pubblicato)
 
-### Schemas Pydantic v2 (Step 4 — `libs/schemas/`)
-- `common.py` — domain models (Database, Record, SearchResult, ecc.) + `Envelope` generic
-- `tools.py` — input/output per ogni tool MVP (con docstring inglese ≤2KB per tool description)
-- `audit.py` — `AuditEntry`
-- `errors.py` — `ErrorCode` enum + `StructuredError`
+### Contributors
 
-### Server core (Step 5 — `apps/server/`)
-- `cli.py` — Click entrypoint `serve|doctor` con `--log-level`
-- `server.py` — FastMCP 3.x bootstrap, registra 3 tool
-- `logging.py` — structlog JSON su stderr (mai stdout)
-- `audit.py` — `AuditLog` SQLite append-only con trigger anti-UPDATE/DELETE
-- `i18n.py` + `locales/it.toml` — traduzione errori
-- `deps.py` — DI container `Deps`
-- `tools/_common.py` — `safe_call` wrapper (audit + i18n + duration)
-- `tools/{list_databases,search,find_related}.py` — implementazioni concrete
+- **Solo `istefox`** (49 commit). Storia git ripulita 2026-05-02 con `git filter-repo` per rimuovere `Co-authored-by: Claude` da tutti i commit (case-insensitive — gotcha GitHub squash-merge usa lowercase).
 
-### Test (Step 6 — `tests/`)
-- `conftest.py` — fixture comuni (mock_adapter, audit_log, cache, deps)
-- `tests/unit/`: 7 file di test, **43 test, 100% pass in ~0.7s**
-- Coverage: schemas 100%, adapter cache 96%/contract 95%/errors 85%/jxa 53%, audit (server) 96%, i18n 100%, tools/_common 100%
+### Test status
 
-### CI (Step 7 — `.github/workflows/`)
-- `ci.yml` — ubuntu: ruff + black + pytest unit + mypy (advisory)
-- `integration.yml` — macos-14, manual trigger (sarà attivato post-spike costi)
-- `release.yml` — placeholder W11
+- 163 unit + contract test pass (157 unit + 6 contract)
+- 7 integration test (skip default, `-m integration` per runarli, richiedono DT running + AppleEvents)
+- macOS-14 GHA integration: 7 run total, mean 31.7s/run, costo budget = 0€ (public repo)
 
-### Documentazione (Step 8)
-- `README.md` aggiornato (stato W2, quick-start, integrazione Claude Desktop, link ADR)
-- `docs/architecture.md` nuovo — overview a layer post-review
-- `CHANGELOG.md` nuovo — Keep a Changelog format, entry 0.0.1
-- `handoff.md` (questo file) aggiornato
+### CI/CD attivi
+
+- `ci.yml` — ubuntu, lint+mypy+unit+contract on PR (success)
+- `integration.yml` — macos-14, on-PR-of-relevant-paths + nightly cron (success, 7/7 skip clean senza DT)
+- `release.yml` — workflow_dispatch, build .mcpb + tag + Release
+- `publish-registry.yml` — push tag `v*` + workflow_dispatch, publish to MCP Registry via OIDC
 
 ---
 
-## Stato corrente del progetto
+## Cosa è stato fatto in questa sessione (2026-05-01 → 2026-05-02)
 
-- **Fase**: W1-W2 milestone completata. Pronto per push su GitHub e GO/NO-GO checkpoint.
-- **Codice**: 3 tool read-only implementati e testati. Bridge JXA pronto. Audit log operativo.
-- **Test**: 43 unit pass, coverage core ≥80%.
-- **CI**: workflow files committati ma non ancora pushati (verifica primo run dopo push).
-- **DT4**: installato in `/Applications/DEVONthink.app` ma **non in esecuzione** durante la sessione → smoke JXA reale ancora da fare.
+Sessione lunga ~10 ore divisa in 3 fasi.
 
----
+### Fase 1 — Pre-0.1.0 polish (0.0.20 → 0.0.28)
 
-## W11 status (2026-05-01) — .mcpb desktop extension packaging
+15 PR di polish emersi da E2E testing reale (Stefano testava in Terminal.app vero su DT4 vero):
 
-W11 chiuso. Bundle `.mcpb` installabile one-click in Claude Desktop:
-- `manifest.json` (v0.4, `server.type=uv`, `entry_point=bundle_main.py`)
-- `bundle_main.py` wrapper standalone (default `serve` sub-command)
-- `scripts/build_mcpb.sh` — build script (78 file, ~270 KB output)
-- README sezione Claude Desktop riscritta (Opzione A `.mcpb` /
-  Opzione B config JSON manuale)
-- Server bumped a 0.0.11. CHANGELOG v0.0.11.
-
-**Limitations da risolvere in iterazione successiva**:
-- `user_config` MCPB non collegato a env vars `ISTEFOX_*` (richiede
-  E2E test con Claude Desktop per capire la semantica per
-  `server.type=uv`)
-- No code signing del bundle (Apple Developer ID required)
-
-**Pendenze post-MVP residue**:
-- Multi-step undo (chain audit_ids per `bulk_apply`)
-- ADR-008 model selection benchmark
-- HTTP transport + OAuth (W8+ originale, deferred a v2)
-- Test strategy Tier 2-4 (W9 originale)
-
----
-
-## W10 status (2026-05-01) — after_state esplicito nell'audit log
-
-W10 chiuso (post-MVP hardening dell'undo):
-- `AuditEntry.after_state` schema field nuovo.
-- Tabella `audit_after_state` append-only (PK su audit_id, triggers
-  come `audit_log` / `preview_consumption`). `audit_log` resta puro.
-- `AuditLog.set_after_state(audit_id, state)` one-shot, ritorna False
-  su PK collision.
-- `file_document` e `bulk_apply` popolano after_state post-apply
-  riuscita. `file_document` ricostruisce dal preview senza refetch.
-- `undo_audit` ora usa after_state per drift detection precisa.
-  Fallback all'euristica legacy se after_state mancante.
-- 132 test pass (era 127, +5).
-- CHANGELOG v0.0.10. Server bumped a 0.0.10.
-
-**Pendenze post-MVP residue**:
-- Multi-step undo (chain audit_ids per `bulk_apply`)
-- ADR-008 model selection benchmark
-- HTTP transport + OAuth (W8+ originale, deferred a v2)
-- Test strategy Tier 2-4 (W9 originale)
-- Packaging `.mcpb` (W11)
-
----
-
-## W9 status (2026-05-01) — hard preview_token enforcement
-
-W9 chiuso in giornata (post-MVP hardening):
-- `confirm_token` ora **hard-enforced** su `file_document` e
-  `bulk_apply`. Apply senza/con token invalido → `INVALID_PREVIEW_TOKEN`.
-- **TTL 5min** di default (override env `ISTEFOX_PREVIEW_TTL_S`).
-  Token scaduti → `EXPIRED_PREVIEW_TOKEN`.
-- **One-shot consumption** via tabella `preview_consumption`
-  append-only (PRIMARY KEY su audit_id = atomic / no replay).
-  Token già usati → `CONSUMED_PREVIEW_TOKEN`.
-- **Cross-tool isolation**: token di un tool non usabile su un altro.
-- 3 nuovi `ErrorCode` + 3 nuove `*PreviewTokenError` adapter classes
-  (catturate via `safe_call`).
-- 127 test pass (era 121, +6 nuovi per i casi rejection).
-- mypy strict + ruff + black clean. CHANGELOG v0.0.9.
-
-**Pendenze post-MVP residue**:
-- After-state esplicito nell'audit log
-- Multi-step undo (chain audit_ids per `bulk_apply`)
-- ADR-008 model selection benchmark
-- HTTP transport + OAuth (W8+ originale, deferred a v2)
-- Test strategy Tier 2-4 (W9 originale)
-- Packaging `.mcpb` (W11)
-
----
-
-## W8 status (2026-05-01) — bulk_apply (post-MVP estensione)
-
-W8 chiuso in giornata. Aggiunto **6° tool MCP**:
-- **`bulk_apply`** (write batch, dry-run by default):
-  - Stesso pattern preview-then-apply di `file_document`.
-  - Op supportati: `add_tag`, `remove_tag`, `move`.
-  - Validation pre-adapter (op type + payload obbligatori).
-  - Failure semantics: no auto-rollback (DT non ha transactions);
-    `stop_on_first_error=true` di default, `outcomes` per-op
-    riporta `applied`/`failed`/`planned` con `error_code`.
-  - Limite 500 op/chiamata.
-- Schema esteso: `BulkOpOutcome` aggiunto, `BulkApplyResult.outcomes`.
-- Server registra ora 6 MCP tool.
-
-121 test pass (112 W7 + 9 nuovi). mypy strict + ruff + black clean.
-CHANGELOG v0.0.8 publicato.
-
-**Pendenze post-MVP** (in ordine di valore):
-- Hard `confirm_token` enforcement con TTL (security/safety hardening
-  del flow esistente; oggi `confirm_token` è advisory)
-- After-state esplicito nell'audit log (oggi inferito dal diff)
-- Multi-step undo (chain audit_ids per `bulk_apply` selective)
-- ADR-008 model selection benchmark MiniLM vs bge-m3 su corpus reale
-- HTTP transport + OAuth (W8+ originale, deferred a v2)
-- Test strategy Tier 2-4 (W9)
-- Packaging `.mcpb` (W11)
-
----
-
-## W6 status (2026-05-01)
-
-W6 chiuso in giornata. Aggiunto:
-- **Reconciliation hash-based** (set-diff DT vs RAG): `reconcile_database`
-  in `apps/server/reindex.py`. Indicizza nuovi UUID, rimuove orfani.
-  Idempotent — safe per cron.
-- **`reconcile <database>` CLI command**.
-- **`WebhookListener`** stdlib loopback su `127.0.0.1:27205/sync-event`,
-  bounded queue 1024, optional Bearer auth via env.
-- **`process_sync_event`**: dispatcher webhook event → RAG provider.
-- **`watch` CLI daemon**: webhook listener + cron reconciliation.
-- **Smart rule template DT4** in `docs/smart-rules/sync_rag.md` con
-  AppleScript snippet + launchd plist per auto-start.
-
-100 test pass (84 W5 + 16 nuovi). mypy strict + ruff + black clean.
-CHANGELOG v0.0.6 publishato.
-
-**Per testare end-to-end** quando vuoi:
-```bash
-export ISTEFOX_RAG_ENABLED=1
-uv run istefox-dt-mcp reindex Business --limit 50    # popolamento iniziale
-uv run istefox-dt-mcp watch --databases Business     # daemon
-# poi configura smart rule DT4 → vedi docs/smart-rules/sync_rag.md
-```
-
-**Prossimo (W7)**: write tools — `file_document` con dry_run + audit
-before_state + confirm_token flow. Schema già pronto da W4. Anche:
-- ADR-008 model selection (benchmark MiniLM vs bge-m3 su corpus reale)
-- Fingerprint-based reconciliation (modification_date diff)
-
----
-
-## W5 status (2026-05-01)
-
-W5 chiuso in giornata. Aggiunto:
-- **`ChromaRAGProvider`** (apps/sidecar): same-process ADR-003, lazy
-  load model + client, asyncio.Lock su write
-- **Config-driven RAG**: `ISTEFOX_RAG_ENABLED=1` + opzionale
-  `ISTEFOX_RAG_MODEL=...`. Default NoopRAGProvider (no overhead)
-- **`reindex` CLI**: walk DT (nuovo `enumerate_records` + script
-  JXA), batch-index in vector store. One-shot manuale; smart rule
-  sync W6.
-- **Hybrid search RRF** in tool `search`: bm25/semantic/hybrid mode
-  via Reciprocal Rank Fusion (k=60)
-- **`ask_database` vector-first**: retrieval semantico se RAG attivo,
-  fallback BM25 trasparente
-
-84 test pass, mypy strict + ruff + black clean. CHANGELOG v0.0.5.
-
-**Per testare end-to-end con dati reali**:
-```bash
-export ISTEFOX_RAG_ENABLED=1
-uv run istefox-dt-mcp reindex Business --limit 50
-uv run istefox-dt-mcp doctor   # vede indexed_count > 0
-```
-
-**Prossimo (W6)**: smart rule DT4 → webhook locale per sync
-incrementale + reconciliation notturna. Anche ADR-008 (model
-selection: MiniLM vs bge-m3) con benchmark su corpus reale.
-
----
-
-## ChromaDB stress spike — ADR-003 PASS (2026-05-01)
-
-Spike preventivo richiesto da ADR-003 §"Spike preventivo" eseguito
-con esito **PASS con margine ~60x sulla latenza**:
-
-| Metric | Misurato | Target | Margine |
-|---|---|---|---|
-| Query p95 | 5.5 ms | < 300 ms | 60x |
-| Memory peak | 1147 MB | < 3000 MB | 38% del budget |
-| Throughput query | 101.2 q/s | 100 q/s | over target |
-| Errori (30K query + 3K write) | 0 | 0 | clean |
-
-Setup: 50K record sintetici, 5 min sustained load, 8 query worker +
-10 write/s. Modello `paraphrase-multilingual-MiniLM-L12-v2` (proxy
-veloce per validare ChromaDB; `bge-m3` da ri-misurare in W5 con
-delta atteso solo su encoding).
-
-Report completo: [`docs/spikes/2026-05-01-chromadb-stress-test.md`](docs/spikes/2026-05-01-chromadb-stress-test.md).
-
-**Conseguenza**: ADR-003 confermato. W5 può partire senza dubbi
-architetturali — `ChromaRAGProvider` same-process è la scelta giusta.
-
----
-
-## W4 status (2026-05-01)
-
-W4 chiuso in giornata. Aggiunto:
-- **Logging refinement**: `safe_call` binda `request_id+tool+audit_id`
-  a `structlog.contextvars`; nuovo evento `tool_call_started` con
-  input redatto (query/question/snippet/answer mascherati)
-- **Schemas write tools** (impl W7+): `FileDocument.confirm_token`,
-  `BulkApply` schema, `Undo` schema con `drift_detected`
-- **RAGProvider ABC** + `NoopRAGProvider` registrato come default
-  in `Deps` — permette di scrivere già adesso codice che usa il RAG
-  layer (ritornerà liste vuote finché W5-6 non sostituisce con
-  `ChromaRAGProvider`)
-
-68 test pass, mypy strict + ruff verdi. CHANGELOG v0.0.4 pubblicato.
-
-**Prossimo (W5-W6)**: RAG sidecar same-process — il salto di valore
-vero. Plan: `ChromaRAGProvider`, embedding pipeline `bge-m3` lazy
-load, smart rule DT4 → webhook, hybrid search in `search` e
-`ask_database`. Spike preventivo ChromaDB stress-test 50K record
-prima dell'implementazione (vedi ADR-003 §"Spike preventivo").
-
----
-
-## W3 status (2026-05-01)
-
-W3 **chiuso** in giornata. Aggiunto:
-- `ask_database` tool (retrieval-only BM25, vector W5-6) +
-  `get_record_text` adapter + script JXA defensive
-- `pytest-benchmark` baseline (4 test, opt-in): bridge ~316 µs,
-  cache hit 2.7 µs / miss 1.7 µs su mock subprocess
-
-51 test unit pass, mypy strict + ruff verdi. CHANGELOG v0.0.3
-pubblicato.
-
-**Prossimo (W4)**: structured logging refinement + Pydantic schemas
-estesi per write tool (preparatorio W7). Poi W5-W6 = RAG sidecar
-(ChromaDB + bge-m3 + smart rule sync) — è il vero salto di valore.
-
----
-
-## Latency thresholds W2 (revised)
-
-Smoke E2E reale ha confermato: il target unico **read p95 < 500ms** del
-brief originale è ottimistico per `find_related`. `DT.compare()` è
-~1s+ anche dalla GUI (operazione semantica nativa di DT).
-
-Threshold revisionati (in vigore da 2026-05-01):
-
-| Categoria | Esempi | Target p95 |
-|---|---|---|
-| **Fast ops** | `list_databases`, `get_record`, `search` | < 500ms |
-| **Compare ops** | `find_related`, in futuro `summarize_topic` | < 1500ms |
-
-Mitigazione: `find_related` ora ha cache UUID-keyed (TTL 300s).
-Seconda chiamata stesso seed → < 10ms warm. Cold path resta ~1s.
-
-Numeri reali (run 2026-05-01 11:34 dal Mac di Stefano):
-- `search 'isolatori'`: mean 110ms p95 138ms
-- `search 'vibrazioni'`: mean 297ms p95 315ms
-- `search 'progetto'`: mean 196ms p95 214ms
-- `search 'report'`: mean 465ms p95 483ms (query generica)
-- `search 'test'`: mean 474ms p95 488ms (query generica)
-- `find_related` (cold): mean 1037ms p95 1088ms — sotto nuovo target
-- `list_databases`: 0ms (cached) — cold ~200ms
-
-Verdetto W2 GO/NO-GO: **PASS ✓** confermato (run 2026-05-01 11:38).
-Fast ops p95 = 487ms (target < 500ms). Compare ops p95 = 1009ms
-(target < 1500ms). Cache find_related riduce iter 2-N warm a ~0ms.
-
----
-
-## ⚠️ Issue noto: macOS Automation permission denied
-
-**Stato (2026-05-01)**: lo smoke E2E reale è bloccato da AppleScript `-1743`
-("Not authorized to send Apple events"). DT4 4.2.2 risponde a property
-read banali (`.version()`, `.running()`) ma rifiuta qualunque Apple Event
-significativo (`.databases()`, `.search()`).
-
-Causa: né **Warp** (terminale dev) né **Claude.app** sono nella lista
-"Automation → DEVONthink" di System Settings. `tccutil reset AppleEvents
-dev.warp.Warp-Stable` non ha forzato il dialog di consenso. Claude.app
-non ha `NSAppleEventsUsageDescription` nel suo `Info.plist` (verificato),
-quindi non può richiedere il consent flow standard.
-
-**Workaround possibili (richiedono UI utente)**:
-
-1. **Aggiungi manualmente Warp/Claude alla lista TCC**: non possibile da
-   GUI senza popup. Serve modifica diretta a `~/Library/Application
-   Support/com.apple.TCC/TCC.db` (richiede Full Disk Access alla shell).
-2. **Pre-autorizza tramite Script Editor**: apri ScriptEditor.app
-   (autorizzato di default), esegui `tell application "DEVONthink" to
-   get name of databases`, accetta il dialog. Questo NON aiuta Warp
-   direttamente.
-3. **Lancia osascript via launchd** con bundle dedicato: complesso.
-4. **Soluzione cleanest** (TBD): packaging `.mcpb` con bundle proprio
-   `Info.plist` + `NSAppleEventsUsageDescription` → al primo uso da
-   Claude Desktop il consent flow funziona.
-
-**Impatto su milestone W1-W2**: tutti i 44 test unit pass (mock JXA
-funzionante), il bridge layer è verificato a livello di codice,
-`AutomationPermissionError` è stato aggiunto al taxonomy con
-`recovery_hint` esplicito. Manca solo la verifica end-to-end su DT
-reale, che è bloccata dal permesso macOS.
-
-**Config Claude Desktop**: `claude_desktop_config.json` è stato
-aggiornato (entry `istefox-dt-mcp`, backup salvato in
-`.bak`). Riavvia Claude Desktop per attivarlo. Probabile che il primo
-tool call mostri `PERMISSION_DENIED` finché non risolto il TCC.
-
----
-
-## Cosa fare nella prossima sessione
-
-### Priorità ALTA — chiusura W1-W2
-
-- [ ] **Risolvere TCC permission** (vedi sezione sopra). Quando fatto:
-  ```bash
-  uv run istefox-dt-mcp doctor   # deve tornare {dt_running: true, ...}
-  uv run python -c "import asyncio; from istefox_dt_mcp_adapter.jxa import JXAAdapter; \
-    print(asyncio.run(JXAAdapter().list_databases()))"
-  ```
-- [ ] **GO/NO-GO checkpoint W2** (REVIEW_ADR §6):
-  - Latenza JXA p95 < 500ms? Misura con `pytest-benchmark` (da scrivere)
-  - Compatibilità DT4 confermata? (richiede TCC fix)
-- [ ] **Test E2E via Claude Desktop**: dopo restart, prova
-  `list_databases`, `search`, `find_related` da chat Claude
-
-### Priorità MEDIA — preparazione W3-W4
-
-- [ ] **Scrivere ADR-006 (OAuth)** in versione "rinviato a v2" (placeholder formale)
-- [ ] **Spike costi CI macOS GHA** (1 giorno) → finalizzazione `integration.yml`
-- [ ] **Cassette VCR** (Tier 2 test): generare 5-10 cassette con DT reale, committarle in `tests/contract/cassettes/`
-- [ ] **Branch protection** su `main` post-CI verde
-- [ ] **Pre-commit hooks** (ruff + black + check uv lock): `uvx pre-commit install`
-
-### Priorità BASSA — quando arriva il momento (W3+)
-
-- [ ] Pool worker async benchmark + tuning (`pytest-benchmark`)
-- [ ] `ask_database` BM25 mode (W4)
-- [ ] RAG sidecar same-process (W5-6) — preceduto da spike ChromaDB stress-test
-- [ ] `file_document` con dry_run (W7)
-- [ ] Spike licenza fixture DT (`.dtBase2` committable?)
-- [ ] Spike licenza `bge-m3` (verifica MIT)
-
----
-
-## Domande aperte per l'utente
-
-1. **Smoke test JXA**: vuoi avviare DT4 ora per chiudere W1-W2? (oppure rinviato a prossima sessione)
-2. **Pre-commit hooks**: installiamo subito `pre-commit` per impedire commit con lint sporco?
-3. **Branch protection**: la attiviamo subito su `main` (richiede CI green) o aspettiamo qualche commit?
-4. **Cassette VCR**: vuoi che io le generi dalla console quando DT4 è in esecuzione, oppure le fai tu interattivamente?
-
----
-
-## Comandi utili (cheatsheet)
-
-```bash
-# Sync workspace dopo cambi a pyproject.toml
-uv sync --all-packages
-
-# Lint + format
-uv run ruff check .
-uv run ruff check . --fix       # safe fix
-uv run black .
-
-# Test
-uv run pytest tests/unit -v
-uv run pytest tests/unit --cov=apps --cov=libs --cov-report=term
-
-# CLI server
-uv run istefox-dt-mcp --help
-uv run istefox-dt-mcp doctor    # health check (DT richiesto)
-uv run istefox-dt-mcp serve     # avvia stdio server
-```
-
----
-
-## Note operative per chi riprende
-
-- **Vincoli obbligatori** in `CLAUDE.md` §2 — leggere PRIMA di proporre design alternativi
-- **Stack lock-in** in `CLAUDE.md` §3 — non sostituire componenti senza ADR
-- **Niente codice GPL**: prima di importare libreria, verifica licenza
-- **DT4 only**: `Application("DEVONthink")` non `Application("DEVONthink 3")`
-- **stdio**: MAI `print()` o `stdout` — solo `stderr` via `structlog`
-- **Namespace**: `istefox-*` (progetto personale)
-- **Tool description**: inglese (sezioni "When to use", "Don't use for", "Examples", ≤ 2KB)
-- **Error message user-facing**: italiano (via `i18n.py` + `locales/it.toml`)
-- **Audit log**: append-only, mai UPDATE/DELETE
-- **Write op**: `dry_run=True` di default, mai exception
-
----
-
-## File chiave
-
-| File | Scopo |
+| PR | Cosa |
 |---|---|
-| `CLAUDE.md` | Regole + vincoli obbligatori |
-| `memory.md` | Decisioni + contesto |
-| `handoff.md` | Questo file |
-| `ARCH-BRIEF-DT-MCP.md` | Brief storico (fonte di verità originale) |
-| `docs/adr/REVIEW_ADR.md` | Architecture review v1.0 (input ADR formali) |
-| `docs/adr/0001-0007*.md` | 6 ADR consolidati |
-| `docs/architecture.md` | Overview a layer corrente |
-| `pyproject.toml` | Workspace uv (root) |
+| #13 | Relicense MIT + housekeeping pre-0.1.0 |
+| #14 | ADR-008 Deferred to 0.2.0 (RAG benchmark deferral) |
+| #15 | `destination_hint` server-side validation |
+| #16 | `list_databases` fast mode (`ISTEFOX_FAST_LIST_DATABASES`) |
+| #17 | Bundle uv detection esteso (mise/asdf + `ISTEFOX_UV_BIN`) |
+| #18 | Bump 0.0.21 + CHANGELOG |
+| #19 | `user_config` MCPB → 4 env var configurabili da Claude Desktop UI |
+| #20 | CLI `audit list --recent N` (recovery path per audit_id) |
+| #21 | Undo `drift_details` per debug visibile |
+| #22 | Tier 2-4 testing (cassettes + integration + smoke E2E) |
+| #23 | README user-facing (rewrite italiano) |
+| #24 | CI Step 3 — macOS integration workflow + real release pipeline |
+| #25 | CI fix: black formatting + integration grep regex |
+| #26 | Doctor 2-stage probe (-1743 detection) |
+| #27 | `search_bm25` reference_url fallback + bench skip when disabled |
+| #28 | `get_record` reference_url fallback + smoke step 3 audit query |
+| #29 | Smoke step 5 hang fix (FIFO+fd3 → echo|server|head pipe) |
+
+### Fase 2 — Release 0.1.0 (Step 8 del piano)
+
+- PR #30: bump 0.0.28 → 0.1.0 + CHANGELOG entry "First public release"
+- Trigger `gh workflow run release.yml -f version=0.1.0` → tag `v0.1.0` creato + GitHub Release pubblicata con `.mcpb` attached
+- PR #31: `server.json` + `publish-registry.yml` workflow per MCP Registry
+- PR #32: README tradotto in inglese + post-0.1.0 corrections
+- PR #33: `server.json` description trim (≤100 chars per validation registry)
+- Trigger `publish-registry.yml` → entry live su MCP Registry come `io.github.istefox/dt-mcp`
+
+### Fase 3 — Cleanup post-release (2026-05-02)
+
+- **Git history rewrite** con `git filter-repo` (case-insensitive!) per rimuovere `Co-authored-by: Claude` da TUTTI gli 82 commit. 2 round di force-push (primo round mancava i lowercase di GitHub squash-merge).
+- Verify: contributors API ritorna solo `istefox` (49 commit).
+- PR #34: `docs/assets/architecture.svg` + embed in README
+- PR #35: SVG fix — sfondo bianco (era trasparente) + RAG label position no-overlap con Audit Log
+- Cleanup: 32 branch locali stale eliminati, 18 bundle pre-0.1.0 rimossi da `dist/`, `.coverage` + `.DS_Store` puliti, backup branch eliminato
+- Spike #9 "Costi CI macOS GHA" risolto: repo public → free unlimited, mean 31.7s/run
 
 ---
 
-## Log handoff
+## Cose pendenti al riavvio
 
-- **2026-04-30 — Setup iniziale**: 3 file di project meta creati. Nessun codice scritto.
-- **2026-04-30 — Scaffolding**: namespace `vibrofer→istefox`, monorepo `uv`, ADR 0001, bozza Cowork email (poi scartata), git init + primo commit (`72c9fc4`).
-- **2026-04-30 — Plan W1-W2**: brief reviewato (REVIEW_ADR.md), 4 domande di scope risposte (5 tool, single-device, CI da decidere, EN+IT), piano `quiet-shimmying-dragonfly.md` approvato.
-- **2026-04-30 — Implementazione W1-W2**: 8 step eseguiti — repo GitHub creato, 5 ADR formali, bridge layer + schemas + server core (~1600 LoC nuove), 43 test unit (100% pass), CI workflow YAML, README/architecture/CHANGELOG aggiornati. Pronto per commit + push + smoke E2E.
+### Non bloccanti, valore alto
+
+1. **`docs/assets/install.gif`** — drag-and-drop install in Claude Desktop (~5-7s, ≤5MB)
+2. **`docs/assets/demo.gif`** — chat → file_document preview → apply (~12-18s, ≤5MB)
+   - Istruzioni precise nella conversazione precedente: kap.app + gifsicle, beats per timing, setup pre-recording
+   - Una volta create entrambe in `docs/assets/`, sostituisco i 2 TODO HTML nel README
+
+### Non bloccanti, valore strategico
+
+3. **Annuncio pubblico** del rilascio 0.1.0:
+   - Post su r/devonthink ("Built an MCP connector for DT4...")
+   - DEVONtechnologies forum sezione Automation
+   - LinkedIn (technical post)
+   - Bluesky / X con hashtag #mcp #devonthink
+4. **Submit a `awesome-mcp-servers`** (lista community curated, optional ma boost visibility)
+
+### 0.2.0 roadmap (vedi CHANGELOG sezione Unreleased)
+
+- RAG benchmark cross-corpus (≥3 corpus, ≥2 early adopter) + flip default modello (ADR-008)
+- Drift detection 3-stati ("no drift" / "already partially undone" / "hostile drift") per ridurre `--force` falso positivo
+- HTTP transport + OAuth multi-device (ADR-006)
+- Tool aggiuntivi: `summarize_topic`, `create_smart_rule`
+- Cassette VCR catturate da DT vivo (oggi sintetiche ma matching shape)
+
+---
+
+## Stato repo locale al riavvio
+
+```
+~/Developer/Devonthink_MCP/
+├── main branch (in sync con origin/main)
+├── 0 stale branches (cleanup fatto)
+├── dist/istefox-dt-mcp-0.1.0.mcpb (1 file, 293 KB)
+└── working tree clean
+```
+
+`git status` → clean. `git log --oneline -3`:
+```
+PR #35 fix(architecture.svg): white background + RAG label no longer overlaps Audit Log
+PR #34 docs: add architecture.svg + embed in README
+PR #33 fix(registry): trim server.json description to ≤100 chars
+```
+
+---
+
+## Riferimenti per il prossimo pickup
+
+- **CHANGELOG.md** — full history versione per versione, sezione `[Unreleased]` lista i pending per 0.2.0
+- **README.md** — aggiornato in inglese, badge v0.1.0, troubleshooting top 5
+- **server.json** + **manifest.json** — both at version 0.1.0, license MIT
+- **scripts/smoke_e2e.sh** — Tier 4 smoke pre-tag, 5 step verdi su 5 (validato 2026-05-02 in Terminal.app)
+- **tests/integration/README.md** — istruzioni run integration su DT vivo
+- **docs/adr/0008-embedding-model-selection.md** — status Deferred to 0.2.0, criteri sblocco
+- **memoria persistente Claude** in `~/.claude/projects/-Users-stefanoferri-Developer-Devonthink-MCP/memory/` — 8 file con stato + pattern + reference
+
+---
+
+## Per riprendere
+
+Da terminale (Terminal.app raccomandato per AppleEvents):
+
+```bash
+cd ~/Developer/Devonthink_MCP
+git status                    # → clean
+git log --oneline -5          # → ultimo PR #35
+gh release view v0.1.0        # → release LIVE con .mcpb asset
+```
+
+Verifica MCP Registry:
+```bash
+curl -sL "https://registry.modelcontextprotocol.io/v0/servers?search=istefox" | python3 -m json.tool | head -20
+```
+
+Verifica integration tests (DT running + TCC OK):
+```bash
+uv run pytest tests/integration -m integration --benchmark-enable -v
+# Atteso: 7 PASS
+```
