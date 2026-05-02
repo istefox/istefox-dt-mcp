@@ -1,0 +1,97 @@
+name: Publish to MCP Registry
+
+# Publishes the server.json to https://registry.modelcontextprotocol.io
+# whenever a v* tag is pushed (i.e. after release.yml creates a release)
+# OR via workflow_dispatch for one-off republishes.
+#
+# Auth: GitHub OIDC. The official registry recognises the OIDC token's
+# `repo` claim and grants access to the io.github.<owner>/* namespace —
+# no PAT required.
+#
+# Pre-condition: server.json at repo root must have its `version` and
+# the `packages[*].identifier` URL pointing at the corresponding release
+# tag. The "Sync server.json version" step does that automatically.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish (e.g. v0.1.0). Defaults to latest tag."
+        required: false
+        type: string
+
+permissions:
+  id-token: write   # required for OIDC authentication
+  contents: read
+
+concurrency:
+  group: publish-registry
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="$(git describe --tags --abbrev=0)"
+          fi
+          # Strip leading "v" for semver fields.
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG"     >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Publishing $TAG (version=$VERSION) to MCP Registry"
+
+      - name: Sync server.json version + bundle URL + sha256
+        # Keeps server.json honest even if the maintainer forgot to bump
+        # it before tagging. We:
+        #   - set .version to the release version
+        #   - rewrite packages[].identifier to point at the actual
+        #     release-bundle URL
+        #   - fetch the bundle from the release and recompute fileSha256
+        run: |
+          set -euo pipefail
+          BUNDLE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/istefox-dt-mcp-${VERSION}.mcpb"
+          echo "Fetching bundle: $BUNDLE_URL"
+          curl -fsSL -o bundle.mcpb "$BUNDLE_URL"
+          SHA="$(shasum -a 256 bundle.mcpb | awk '{print $1}')"
+          echo "sha256=$SHA"
+          # Patch server.json with jq.
+          sudo apt-get install -y jq >/dev/null 2>&1 || true
+          jq --arg v "$VERSION" --arg url "$BUNDLE_URL" --arg sha "$SHA" '
+            .version = $v
+            | .packages |= map(
+                if .registryType == "mcpb" then
+                  .identifier = $url | .fileSha256 = $sha | .version = $v
+                else . end
+              )
+          ' server.json > server.tmp.json
+          mv server.tmp.json server.json
+          echo "----- server.json (post-sync) -----"
+          cat server.json
+
+      - name: Install mcp-publisher
+        run: |
+          ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          URL="https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_${OS}_${ARCH}.tar.gz"
+          echo "Downloading $URL"
+          curl -fsSL "$URL" | tar xz mcp-publisher
+          chmod +x mcp-publisher
+          ./mcp-publisher --help | head -5 || true
+
+      - name: Authenticate via GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json to MCP Registry
+        run: ./mcp-publisher publish
