@@ -17,6 +17,10 @@
     </marker>
   </defs>
 
+  <!-- White background so the diagram is readable on any host theme
+       (GitHub dark mode, image viewers, social previews). -->
+  <rect width="920" height="720" fill="#ffffff" />
+
   <style>
     .box { fill: none; stroke: #7d8590; stroke-width: 1.5; rx: 6; ry: 6; }
     .box-accent { fill: none; stroke: #f97316; stroke-width: 1.5; stroke-dasharray: 5 4; rx: 6; ry: 6; }
@@ -114,9 +118,12 @@
   <text x="860" y="376" text-anchor="middle" class="detail">transformers</text>
   <text x="860" y="398" text-anchor="middle" class="accent-text">opt-in</text>
 
-  <!-- Connection from RAG to server (dashed, opt-in) -->
-  <path class="conn-accent" d="M 820 320 Q 805 320 805 320 L 800 320" marker-end="url(#arrow-dashed)" />
-  <text x="780" y="312" class="accent-text" text-anchor="end" font-size="10">ISTEFOX_RAG_ENABLED=1</text>
+  <!-- Connection from RAG to server (dashed, opt-in).
+       Placed at y=280 (between the FastMCP tagline at y=273 and the
+       6 MCP tools sub-box at y=290) to avoid overlapping the Audit
+       Log box (y=290-336) which is at the same x range. -->
+  <line class="conn-accent" x1="820" y1="280" x2="803" y2="280" marker-end="url(#arrow-dashed)" />
+  <text x="795" y="273" class="accent-text" text-anchor="end" font-size="10">ISTEFOX_RAG_ENABLED=1</text>
 
   <!-- Schemas footer note -->
   <line x1="40" y1="708" x2="900" y2="708" stroke="#d0d7de" stroke-width="0.5" />
