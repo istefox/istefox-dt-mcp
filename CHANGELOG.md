@@ -5,10 +5,110 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
-### Added
-- (post-MVP) Tier 2-4 testing executed (cassettes + integration su DT reale)
-- (post-MVP) CI macOS GHA per integration nightly + on-PR
-- (0.2.0) RAG benchmark cross-corpus + flip default modello (ADR-008)
+### Planned for 0.2.0
+- RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default modello (ADR-008)
+- Drift detection 3-state ("no drift" / "already partially undone" / "hostile drift")
+  per ridurre il falso positivo che richiede `--force` quando il record e' gia'
+  allineato a `before_state`
+- HTTP transport + OAuth (multi-device) — ADR-006
+- `summarize_topic`, `create_smart_rule` tool aggiuntivi
+- Captures GIF (install + demo + architecture) per il README
+- Cassette VCR catturate da DT vivo (oggi sintetiche)
+
+---
+
+## [0.1.0] — 2026-05-02 — First public release
+
+Prima release pubblica del connettore MCP per DEVONthink 4.
+Repo GitHub public, license MIT, .mcpb desktop extension installabile
+direttamente in Claude Desktop.
+
+### Highlight
+
+- **6 MCP tool end-to-end**: `list_databases`, `search` (BM25 + opt-in
+  vector hybrid RRF), `find_related`, `ask_database` (BM25 + opt-in
+  vector), `file_document` (preview-then-apply con `confirm_token`),
+  `bulk_apply` (batch ops con per-op outcomes).
+- **Audit log SQLite append-only** di OGNI tool call, con
+  `before_state`/`after_state` per write op e **undo selettivo**
+  via `audit_id`. Drift detection con `drift_details` per debug
+  visibile.
+- **Distribuzione dual**: bundle `.mcpb v0.1.0` (raccomandato per
+  Claude Desktop) + `pipx install` (CLI standalone) + source / dev
+  install via `uv`.
+- **`user_config` MCPB**: 4 env var configurabili dalla UI di
+  Claude Desktop (`fast_list_databases`, `preview_ttl_s`,
+  `rag_enabled`, `rag_model`).
+- **CLI `audit list --recent N`** per recuperare audit_id e
+  ispezionare lo storico delle operazioni.
+- **CLI `doctor` a 2 stage** che rileva precocemente AppleEvents
+  permission denied (-1743) con `recovery_hint` actionable.
+
+### Test strategy 4-tier (ADR-005)
+
+- **Tier 1 unit**: 157 test, 100% pass, mypy strict + ruff + black clean.
+- **Tier 2 contract VCR**: 6 cassette JSON con output JXA realistici
+  per ogni script + replay test framework.
+- **Tier 3 integration su DT reale**: 6 smoke (uno per tool) + 1
+  latency benchmark (`get_record` mean < 500ms target W2). Marker
+  `@pytest.mark.integration`, autouse `dt_running` fixture skip
+  clean se DT non running o AppleEvents -1743.
+- **Tier 4 smoke E2E pre-tag**: `scripts/smoke_e2e.sh` con 5 step
+  (doctor + raw JXA + audit DB + bundle artifact + server lifecycle
+  via JSON-RPC initialize).
+
+### CI/CD
+
+- **`ci.yml`** ubuntu: lint + black + mypy + unit + contract on PR
+- **`integration.yml`** macos-14: nightly + on-PR-of-relevant-paths,
+  valida import + bundle build (DT non installabile in GHA, real
+  integration resta manuale via smoke script)
+- **`release.yml`** workflow_dispatch: validazione + build .mcpb +
+  tag + GitHub Release con .mcpb attached + release notes da
+  CHANGELOG
+
+### Privacy & sicurezza
+
+- **Tutto locale**: nessun dato esce dalla macchina (no telemetry,
+  no cloud embeddings, no analytics)
+- **Audit log append-only** con triggers SQLite anti-UPDATE/DELETE
+- **Tool di scrittura** sempre dry_run di default + preview-then-apply
+  con `confirm_token` (TTL 5min, one-shot, cross-tool isolation)
+- **Implementazione clean-room**: nessun codice copiato da
+  `dvcrn/mcp-server-devonthink` (GPL-3.0)
+- License **MIT**, repo **public**
+
+### Stato RAG (vector search) — opt-in experimental
+
+Il codice RAG (W5-W6) e' completo e testato a livello unit
+(ChromaRAGProvider, hybrid RRF, ask_database vector path,
+reindex/reconcile/watch CLI, smart-rule template). Default
+`ISTEFOX_RAG_ENABLED=false` perche' il modello embedding non e'
+ancora benchmarkato cross-corpus — vedi **ADR-008** per criteri di
+sblocco 0.2.0 (>=3 corpus, >=2 early adopter, MRR/recall/latency
+threshold). Se attivi RAG ora, sappi che la qualita' dipende
+fortemente dal tuo corpus.
+
+### Decisioni esplicitamente rinviate
+
+- HTTP transport + OAuth -> 0.2.0 (ADR-006)
+- RAG benchmark + default flip -> 0.2.0 (ADR-008)
+- Drift detection 3-stati -> 0.2.0
+- Tool aggiuntivi (`summarize_topic`, `create_smart_rule`) -> 0.2.0+
+
+### Compatibilita'
+
+- macOS 14+
+- DEVONthink 4.0+ (Pro o standard)
+- Python 3.12+ (gestito automaticamente da `uv` per il bundle)
+- Claude Desktop 0.7+ (manifest_version 0.3)
+
+### Discovery dalla sessione di validazione 2026-05-01
+
+15 PR di polish (0.0.21 -> 0.0.28) emergono dal real-world E2E testing
+prima del tag pubblico. Ogni bug e' stato scoperto da un test reale,
+non immaginato. La test strategy 4-tier ha fatto esattamente il suo
+lavoro: Tier 1 valida la logica, Tier 3-4 valida la realta'.
 
 ---
 
