@@ -3,37 +3,37 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
-[![Status: Pre-release](https://img.shields.io/badge/status-pre--release-orange.svg)](#stato)
+[![Release: v0.1.0](https://img.shields.io/badge/release-v0.1.0-brightgreen.svg)](https://github.com/istefox/istefox-dt-mcp/releases/latest)
 
-MCP server per DEVONthink 4 — outcome-oriented tools, RAG locale opzionale, privacy-first. Stack Python 3.12 + FastMCP + ChromaDB + uv.
+MCP server for DEVONthink 4 — outcome-oriented tools, optional local RAG, privacy-first. Stack: Python 3.12 + FastMCP + ChromaDB + uv.
 
-> **⚠️ Pre-release (0.0.x)**: l'API dei tool è considerata stabile; possono esserci breaking change minori prima di **0.1.0** (target metà maggio 2026). RAG vector è opt-in experimental. Vedi [`handoff.md`](handoff.md) per lo stato corrente, [`CLAUDE.md`](CLAUDE.md) per i vincoli, [`docs/adr/`](docs/adr/) per le decisioni consolidate.
+> **0.1.0 — first public release (May 2026)**. Six MCP tools end-to-end, preview-then-apply with audit log + selective undo, `.mcpb` bundle installable in Claude Desktop. Vector RAG is opt-in experimental — see [ADR-008](docs/adr/0008-embedding-model-selection.md). For day-to-day status, see [`handoff.md`](handoff.md); for project constraints, see [`CLAUDE.md`](CLAUDE.md); for design decisions, see [`docs/adr/`](docs/adr/).
 
 ---
 
-## Quick Install (3 strade)
+## Quick Install (3 ways)
 
-| Strada | Per chi | Prerequisiti |
+| Path | Best for | Prerequisites |
 |---|---|---|
-| **A — `.mcpb` desktop extension** (raccomandato) | Utenti Claude Desktop, zero-config | Claude Desktop ≥ 0.8 |
-| **B — `pipx install`** (CLI standalone) | CLI users, altri host MCP | Python 3.12, `pipx` |
-| **C — Source / dev install** | Contributor, debug | `uv`, git |
+| **A — `.mcpb` desktop extension** (recommended) | Claude Desktop users, zero-config | Claude Desktop ≥ 0.8 |
+| **B — `pipx install`** (standalone CLI) | CLI users, other MCP hosts | Python 3.12, `pipx` |
+| **C — Source / dev install** | Contributors, debugging | `uv`, `git` |
 
-### A — `.mcpb` desktop extension (raccomandato)
+### A — `.mcpb` desktop extension (recommended)
 
-Drag-and-drop in Claude Desktop, 1-click. Il bundle gestisce runtime + dipendenze.
+Drag-and-drop into Claude Desktop, one-click. The bundle handles its own runtime and dependencies.
 
-1. Scarica l'ultimo `.mcpb` da [GitHub Releases](https://github.com/istefox/istefox-dt-mcp/releases/latest)
-2. Trascinalo sulla finestra di Claude Desktop (oppure **Settings → Developer → Install Bundle**)
-3. Al primo uso macOS chiederà il permesso AppleEvents — accetta
+1. Download the latest `.mcpb` from [GitHub Releases](https://github.com/istefox/istefox-dt-mcp/releases/latest).
+2. Drag it onto the Claude Desktop window (or **Settings → Developer → Install Bundle**).
+3. On first use, macOS will ask for AppleEvents permission — click **Allow**.
 
-### B — `pipx install` (CLI standalone)
+### B — `pipx install` (standalone CLI)
 
 ```bash
 pipx install git+https://github.com/istefox/istefox-dt-mcp
 ```
 
-Poi aggiungi a `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Then add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -55,162 +55,162 @@ uv sync --all-packages
 uv run istefox-dt-mcp doctor
 ```
 
-Vedi [Setup](#setup) per i dettagli completi (permessi macOS, troubleshooting installazione).
+See [Setup](#setup) for full details (macOS permissions, install troubleshooting).
 
-<!-- TODO before 0.1.0 tag:
-     - docs/assets/install.gif (Claude Desktop install .mcpb, ~5s loop, ≤5MB)
+<!-- TODO before next release:
+     - docs/assets/install.gif (Claude Desktop install of .mcpb, ~5s loop, ≤5MB)
      - docs/assets/demo.gif (chat → file_document preview → apply → undo, ~15s)
-     - docs/assets/architecture.svg (diagramma a layer)
-     Capturer: kap.app o Gifox; ottimizzazione: gifsicle -O3
+     - docs/assets/architecture.svg (layered architecture diagram)
+     Capture: kap.app or Gifox; optimize: gifsicle -O3
 -->
 
 ---
 
-## Prerequisiti
+## Prerequisites
 
-- **macOS 14+** (Sonoma o successivi)
-- **DEVONthink 4** (Pro o standard, qualsiasi licenza) installato e in esecuzione
-- **Spazio disco**: ~300MB per il bundle, **+2GB** se attivi RAG con `bge-m3`
-- **AppleEvents permission** al terminale (per pipx/dev) o a Claude Desktop (per `.mcpb`) — viene richiesto automaticamente al primo uso
+- **macOS 14+** (Sonoma or later)
+- **DEVONthink 4** (Pro or standard, any license) installed and running
+- **Disk space**: ~300 MB for the bundle, **+2 GB** if you enable RAG with `bge-m3`
+- **AppleEvents permission** for the terminal (pipx/dev) or for Claude Desktop (`.mcpb`) — requested automatically on first use
 
 ---
 
-## Cosa puoi chiedere a Claude
+## What you can ask Claude
 
-Esempi di prompt naturali e tool MCP che si attivano. Tutti gli esempi assumono Claude Desktop con il connector installato e DEVONthink in esecuzione.
+Examples of natural prompts and the MCP tool each one triggers. All examples assume Claude Desktop with the connector installed and DEVONthink running.
 
-- *"Cerca tutto su 'isolatori antivibranti' negli ultimi 2 anni"*
-  → `search` (BM25 di default, hybrid se RAG attivo)
-- *"Cosa abbiamo proposto a Cliente X?"*
-  → `ask_database` (BM25 + sintesi; vector se RAG opt-in — vedi [RAG](#rag-vector-search--opt-in-experimental))
-- *"Trovami documenti simili a questo PDF"* (con un record selezionato in DT)
-  → `find_related` (See Also/Compare nativo DT)
-- *"Filemi questo allegato nella cartella `/Inbox/Triage` e taggalo come `urgente`"*
-  → `file_document` con preview, ti mostra cosa farà, poi conferma con `confirm_token`
-- *"Sposta tutti i PDF di marzo dalla `Inbox` a `/Archivio/2026`"*
-  → `bulk_apply` (batch dry-run + apply selettivo per record)
-- *"Quali database sono aperti in DT?"*
-  → `list_databases` (read-only, cache 5min)
+- *"Find everything about 'antivibration mounts' from the last 2 years"*
+  → `search` (BM25 by default; hybrid if RAG is enabled)
+- *"What did we propose to Customer X?"*
+  → `ask_database` (BM25 + synthesis; vector if RAG opt-in is on — see [RAG](#rag-vector-search--opt-in-experimental))
+- *"Find documents similar to this PDF"* (with a record selected in DT)
+  → `find_related` (DT's native See Also/Compare)
+- *"File this attachment in `/Inbox/Triage` and tag it `urgent`"*
+  → `file_document` with preview, shows what it will do, then commit with `confirm_token`
+- *"Move every March PDF from the `Inbox` to `/Archive/2026`"*
+  → `bulk_apply` (batch dry-run + per-record selective apply)
+- *"Which databases are open in DT?"*
+  → `list_databases` (read-only, 5-min cache)
 
-I tool write (`file_document`, `bulk_apply`) sono **dry-run by default**: la prima chiamata produce sempre una preview. L'apply richiede un `confirm_token` esplicito. L'`audit_id` restituito permette `undo` selettivo via CLI.
+Write tools (`file_document`, `bulk_apply`) are **dry-run by default**: the first call always returns a preview. Apply requires an explicit `confirm_token`. The returned `audit_id` enables selective `undo` via the CLI.
 
-<!-- TODO before 0.1.0 tag:
-     - docs/assets/demo.gif posizionata qui (chat → file_document preview → apply → undo)
+<!-- TODO before next release:
+     - docs/assets/demo.gif belongs here (chat → file_document preview → apply → undo)
 -->
 
 ---
 
-## Privacy & sicurezza
+## Privacy & security
 
-Il connector è progettato **privacy-first** e **local-only**:
+The connector is designed **privacy-first** and **local-only**:
 
-- **Tutto resta sulla tua macchina**: nessun dato esce. Niente telemetry, niente embedding cloud, niente analytics. Il modello embedding (se attivi RAG) gira locale via `sentence-transformers`.
-- **Audit log SQLite append-only** di **ogni** operazione (read incluse) in `~/.local/share/istefox-dt-mcp/audit.db`. Retention default 90 giorni, configurabile.
-- **Tool di scrittura sempre `dry_run=true` by default**, pattern preview-then-apply con `confirm_token` a TTL breve (5 min default).
-- **Undo selettivo via `audit_id`**: ogni write op salva il before-state, ripristinabile con `istefox-dt-mcp audit undo <audit_id>`.
-- **Implementazione clean-room**, **license MIT**: nessun codice copiato da progetti GPL (vedi [Vincoli legali](#vincoli-legali)).
-- **Adatto a dati sensibili**: contratti, fatture, note personali, corrispondenza cliente.
+- **Everything stays on your machine**: no data leaves it. No telemetry, no cloud embeddings, no analytics. The embedding model (if you enable RAG) runs locally via `sentence-transformers`.
+- **Append-only SQLite audit log** for **every** operation (reads included) at `~/.local/share/istefox-dt-mcp/audit.sqlite`. Default 90-day retention, configurable.
+- **Write tools always default to `dry_run=true`**, with a preview-then-apply pattern guarded by a short-TTL `confirm_token` (5 min default).
+- **Selective undo via `audit_id`**: every write op stores the before-state and is restorable with `istefox-dt-mcp undo <audit_id>`.
+- **Clean-room implementation**, **MIT license**: no code copied from GPL-licensed projects (see [Legal constraints](#legal-constraints)).
+- **Suitable for sensitive data**: contracts, invoices, personal notes, customer correspondence.
 
 ---
 
 ## Roadmap
 
-| Versione | Cosa | Riferimenti |
+| Version | What | References |
 |---|---|---|
-| **0.1.0** (questo release, mag 2026) | 6 tool MCP, audit + undo, bundle `.mcpb`, BM25-only retrieval | — |
-| **0.2.0** (Q3 2026) | RAG benchmark cross-corpus + flip default modello, drift detection 3-stati | [ADR-008](docs/adr/0008-embedding-model-selection.md) |
-| **0.3.0+** (Q4 2026) | HTTP transport + OAuth multi-device, tool aggiuntivi (`summarize_topic`, `create_smart_rule`) | [ADR-006](docs/adr/0006-transport-stdio-only.md), [ADR-004](docs/adr/0004-mvp-tool-scope.md) |
+| **0.1.0** (this release, May 2026) | 6 MCP tools, audit + undo, `.mcpb` bundle, BM25-only retrieval by default | — |
+| **0.2.0** (Q3 2026) | RAG benchmark cross-corpus + flip default model, 3-state drift detection | [ADR-008](docs/adr/0008-embedding-model-selection.md) |
+| **0.3.0+** (Q4 2026) | HTTP transport + OAuth multi-device, additional tools (`summarize_topic`, `create_smart_rule`) | [ADR-004](docs/adr/0004-mvp-tool-scope.md) |
 
-Backlog completo in [`handoff.md`](handoff.md).
+Full backlog in [`handoff.md`](handoff.md).
 
 ---
 
 ## Troubleshooting top 5
 
-| Errore | Sintomo | Fix |
+| Error | Symptom | Fix |
 |---|---|---|
-| `DT_NOT_RUNNING` | Tutti i tool falliscono all'avvio | DEVONthink non è in esecuzione — avvialo (Spotlight: `DEVONthink`) |
-| `PERMISSION_DENIED` (`-1743`) | Errore al primo Apple Event | **System Settings → Privacy & Security → Automation** → abilita il check verso `DEVONthink` per il terminale o per Claude Desktop |
-| `DATABASE_NOT_FOUND` | `file_document` o `bulk_apply` rifiuta il path | `destination_hint` senza prefix database — usa `/Inbox/<group>` (con leading slash), non `/<group>` |
-| `uv binary not found` | Bundle `.mcpb` non parte al primo run | `brew install uv` (oppure `curl -LsSf https://astral.sh/uv/install.sh \| sh`), poi disable + enable l'extension in Claude Desktop |
-| `drift_detected: true` (su undo) | Undo rifiuta il rollback | Il record è stato modificato dopo l'apply originale. Usa `istefox-dt-mcp audit list --recent` per vedere il contesto, poi `--force` se sei sicuro che il rollback sia ancora desiderato |
+| `DT_NOT_RUNNING` | All tools fail at startup | DEVONthink isn't running — launch it (Spotlight: `DEVONthink`) |
+| `PERMISSION_DENIED` (`-1743`) | First Apple Event errors out | **System Settings → Privacy & Security → Automation** → enable the toggle for `DEVONthink` under your terminal or Claude Desktop |
+| `DATABASE_NOT_FOUND` | `file_document` or `bulk_apply` rejects the path | `destination_hint` is missing the database prefix — use `/Inbox/<group>` (with leading slash), not `/<group>` |
+| `uv binary not found` | The `.mcpb` bundle won't start on first run | `brew install uv` (or `curl -LsSf https://astral.sh/uv/install.sh \| sh`), then disable + re-enable the extension in Claude Desktop |
+| `drift_detected: true` (on undo) | Undo refuses to roll back | The record was modified after the original apply. Run `istefox-dt-mcp audit list --recent` for context, then add `--force` if the rollback is still what you want |
 
-Per errori non listati: `uv run istefox-dt-mcp doctor` produce un report diagnostico completo (DT in esecuzione, permessi, cache, RAG).
-
----
-
-## Stato
-
-**MVP completo + estensioni W8-W11**: 6 tool MCP operativi end-to-end, validati in Claude Desktop con dati reali (v0.0.20). 137 test unit verdi. Bundle `.mcpb` distribuibile. Audit log + undo selettivo funzionanti.
+For anything not listed: `uv run istefox-dt-mcp doctor` produces a full diagnostic report (DT running, permissions, cache, RAG state).
 
 ---
 
-## Cosa fa
+## Status
 
-Connector MCP per DEVONthink 4 che va oltre il wrapping 1:1 della scripting dictionary.
+**0.1.0 first public release**: 6 MCP tools end-to-end, validated in Claude Desktop with real data. **163 unit + contract tests** green. `.mcpb` bundle distributable. Audit log + selective undo working. CI on Ubuntu (lint + mypy + unit + contract) and macOS-14 (import + bundle smoke + nightly).
 
-**MVP (5 tool, sequenza implementazione W1-W7)** + estensioni post-MVP:
+---
 
-| Tool | Tipo | Stato | Settimana |
-|---|---|---|---|
-| `list_databases` | read | ✅ implementato | W1-W2 |
-| `search` | read (BM25 + semantic + hybrid RRF) | ✅ implementato | W1-W2, hybrid W5 |
-| `find_related` | read (See Also/Compare) | ✅ implementato | W1-W2 |
-| `ask_database` | read (vector + BM25 fallback) | ✅ implementato | W3, vector W5 |
-| `file_document` | write con `dry_run` + undo | ✅ implementato | W7 |
-| `bulk_apply` | write batch con `dry_run` (post-MVP) | ✅ implementato | W8 |
+## What it does
 
-**MVP completo + estensione W8**: 6 tool MCP operativi end-to-end.
-I tool write seguono il pattern preview-then-apply: chiamarli con
-`dry_run=true` ritorna un preview + `preview_token` (audit_id), poi
-con `dry_run=false` + `confirm_token=<preview_token>` viene applicato
-e l'`audit_id` permette `undo` selettivo via CLI.
+A DEVONthink 4 connector for MCP that goes beyond a 1:1 wrapper of the scripting dictionary.
 
-Esclusi da MVP (post-W8): `summarize_topic`, `create_smart_rule` — vedi [ADR-004](docs/adr/0004-mvp-tool-scope.md).
+**The six tools:**
+
+| Tool | Type | Notes |
+|---|---|---|
+| `list_databases` | read | Open databases, with 5-min cache |
+| `search` | read | BM25 (default) + optional vector hybrid (RRF) when RAG is enabled |
+| `find_related` | read | Wraps DT's native See Also / Compare |
+| `ask_database` | read | BM25 + synthesis (default) + optional vector retrieval |
+| `file_document` | write | `dry_run` by default + preview-then-apply + selective undo |
+| `bulk_apply` | write | Batch ops with `dry_run` + per-op outcomes |
+
+The two write tools follow the preview-then-apply pattern: calling them with `dry_run=true` returns a preview plus a `preview_token` (the audit_id of the dry-run); a second call with `dry_run=false` plus `confirm_token=<preview_token>` actually applies the change. The returned `audit_id` enables selective `undo` via the CLI.
+
+Out of MVP scope (post-0.1.0): `summarize_topic`, `create_smart_rule` — see [ADR-004](docs/adr/0004-mvp-tool-scope.md).
 
 ---
 
 ## Stack
 
-| Componente | Tecnologia | Riferimento |
+| Component | Tech | Reference |
 |---|---|---|
-| Linguaggio | Python 3.12 | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
-| Framework MCP | FastMCP 3.x | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
-| Validazione | Pydantic v2 | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
-| Bridge DT | JXA-only v1 (astrazione multi-bridge ready) | [ADR-002](docs/adr/0002-bridge-architecture-jxa-only.md) |
+| Language | Python 3.12 | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| MCP framework | FastMCP 3.x | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| Validation | Pydantic v2 | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| DT bridge | JXA-only in v1 (multi-bridge-ready abstraction) | [ADR-002](docs/adr/0002-bridge-architecture-jxa-only.md) |
 | Vector DB | ChromaDB embedded | [ADR-003](docs/adr/0003-rag-same-process.md) |
-| Embedding | `bge-m3` o `multilingual-e5-large` (W5) | [ADR-001](docs/adr/0001-stack-python-fastmcp-chromadb.md) |
+| Embedding | `paraphrase-multilingual-MiniLM-L12-v2` (default), `BAAI/bge-m3` opt-in | [ADR-008](docs/adr/0008-embedding-model-selection.md) |
 | Cache | SQLite WAL | — |
-| Test | pytest + 4-tier strategy | [ADR-005](docs/adr/0005-test-strategy-4-tier.md) |
+| Tests | pytest + 4-tier strategy | [ADR-005](docs/adr/0005-test-strategy-4-tier.md) |
 | Packaging | `uv` workspace + hatchling | — |
-| Logging | structlog (JSON su stderr) | — |
-| Distribuzione | `pipx` + `.mcpb` (W11) | — |
+| Logging | structlog (JSON to stderr) | — |
+| Distribution | `pipx` + `.mcpb` desktop extension | — |
 
-Versione minima DT: **DEVONthink 4.0**. DT3 non supportato — vedi [ADR-007](docs/adr/0007-dt4-only.md).
+Minimum DT version: **DEVONthink 4.0**. DT3 is not supported — see [ADR-007](docs/adr/0007-dt4-only.md).
 
 ---
 
-## Struttura repo
+## Repository structure
 
 ```
 .
 ├── apps/
-│   ├── server/      MCP server FastMCP (stdio v1; HTTP+OAuth → v2)
-│   └── sidecar/     RAG sidecar (ChromaDB + embeddings) — placeholder
+│   ├── server/      MCP server (FastMCP, stdio in v1; HTTP+OAuth → v2)
+│   └── sidecar/     RAG sidecar (ChromaDB + embeddings)
 ├── libs/
-│   ├── adapter/     Bridge JXA + cache + errors + script JXA
-│   └── schemas/     Pydantic v2 condivisi (common, tools, audit, errors)
+│   ├── adapter/     JXA bridge + cache + errors + JXA scripts
+│   └── schemas/     Shared Pydantic v2 models (common, tools, audit, errors)
 ├── tests/
-│   ├── unit/        Test unit (43 test, 100% pass)
-│   ├── contract/    VCR-style cassette (placeholder)
-│   └── fixtures/    Fixture condivisi
+│   ├── unit/        Unit tests (157 tests)
+│   ├── contract/    VCR-style replay against captured JXA outputs (6 tests)
+│   ├── integration/ Real-DT smoke + latency benchmark (7 tests, opt-in)
+│   └── benchmark/   Micro-benchmarks (opt-in)
 ├── docs/
-│   └── adr/         7 ADR consolidati
-├── .github/workflows/  CI (ubuntu) + integration (macos-14, manual) + release (placeholder)
-├── pyproject.toml   uv workspace + ruff + black + mypy + pytest
-├── CLAUDE.md        Vincoli obbligatori
-├── memory.md        Decisioni + contesto
-└── handoff.md       Passaggi tra sessioni
+│   └── adr/         Architecture decision records
+├── .github/workflows/   CI (Ubuntu) + Integration (macOS-14) + Release (manual) + Publish-Registry
+├── scripts/             build_mcpb.sh + smoke_e2e.sh
+├── server.json          MCP Registry manifest
+├── manifest.json        .mcpb bundle manifest
+├── pyproject.toml       uv workspace + ruff + black + mypy + pytest
+├── CLAUDE.md            Mandatory project constraints
+├── memory.md            Decisions + context
+└── handoff.md           Session-to-session handover
 ```
 
 ---
@@ -218,9 +218,9 @@ Versione minima DT: **DEVONthink 4.0**. DT3 non supportato — vedi [ADR-007](do
 ## Setup
 
 ```bash
-# Prerequisiti: macOS, DEVONthink 4 installato
+# Prerequisites: macOS, DEVONthink 4 installed
 
-# Install uv (se assente — alternativa: brew install uv)
+# Install uv (if missing — alternative: brew install uv)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone + sync workspace
@@ -229,22 +229,19 @@ cd istefox-dt-mcp
 uv sync --all-packages
 ```
 
-### macOS Automation permission (obbligatorio)
+### macOS Automation permission (mandatory)
 
-DEVONthink risponde alle Apple Events solo se l'app che le invia ha
-il permesso esplicito. Al primo `uv run istefox-dt-mcp doctor` con
-DT in esecuzione, macOS mostrerà un dialog "X vuole controllare
-DEVONthink": clicca **OK**.
+DEVONthink only responds to Apple Events from apps that have explicit permission. On the first `uv run istefox-dt-mcp doctor` with DT running, macOS will show a "X wants to control DEVONthink" dialog: click **OK**.
 
-Se non vedi il dialog (cliccato in passato "Non consentire"):
+If you don't see the dialog (because you clicked "Don't Allow" earlier):
 
-1. Apri **System Settings → Privacy & Security → Automation**
-2. Trova il terminale o app da cui esegui (Warp, iTerm, Terminal, Claude Desktop)
-3. Abilita il check verso **DEVONthink**
+1. Open **System Settings → Privacy & Security → Automation**.
+2. Find the terminal or app you're running from (Warp, iTerm, Terminal, Claude Desktop).
+3. Enable the toggle for **DEVONthink**.
 
-Errore tipico in caso di permesso negato: `PERMISSION_DENIED` con
-codice AppleScript `-1743`. Il connector lo intercetta e suggerisce
-l'app coinvolta nel `recovery_hint`.
+Typical error when permission is denied: `PERMISSION_DENIED` with AppleScript code `-1743`. The connector intercepts it and suggests the affected app in the `recovery_hint`.
+
+If your terminal doesn't appear in the Automation list, try `tccutil reset AppleEvents <bundle-id>` (e.g. `com.apple.Terminal`, `com.googlecode.iterm2`) and re-run the probe so macOS can prompt fresh.
 
 ---
 
@@ -255,108 +252,102 @@ l'app coinvolta nel `recovery_hint`.
 uv run ruff check .
 uv run black --check .
 
-# Test unit (112 test, ~4s)
-uv run pytest tests/unit -v
+# Unit + contract tests (~6s)
+uv run pytest tests/unit tests/contract -v
 
-# Test con coverage
+# Tests with coverage
 uv run pytest tests/unit --cov=apps --cov=libs --cov-report=term
 
-# Micro-benchmark (opt-in: cache + bridge overhead)
+# Integration tests against real DT (opt-in; requires DT running + AppleEvents)
+uv run pytest tests/integration -m integration --benchmark-enable -v
+
+# Micro-benchmarks (opt-in: cache + bridge overhead)
 uv run pytest tests/benchmark --benchmark-enable --benchmark-only
 
 # CLI
 uv run istefox-dt-mcp --help
-uv run istefox-dt-mcp doctor       # health check (richiede DT in esecuzione)
-uv run istefox-dt-mcp serve        # avvia server stdio (per Claude Desktop)
+uv run istefox-dt-mcp doctor       # health check (requires DT running)
+uv run istefox-dt-mcp serve        # stdio server (for Claude Desktop)
+uv run istefox-dt-mcp audit list --recent 5   # last 5 audit entries
 ```
 
 ## Performance tuning (env vars)
 
-| Variabile | Default | Effetto |
+| Variable | Default | Effect |
 |---|---|---|
-| `ISTEFOX_FAST_LIST_DATABASES` | `false` | Se truthy (`1`/`true`/`yes`/`on`): `list_databases` salta il computo di `record_count` (ritorna `null`). Utile su database con decine di migliaia di record dove `d.contents().length` può richiedere secondi alla prima invocazione (la cache 5min ammortizza le successive). Default: count incluso, comportamento invariato. |
-| `ISTEFOX_PREVIEW_TTL_S` | `300` | Override TTL in secondi del `preview_token` (default 5 minuti). Range valido: 1-3600. |
-| `ISTEFOX_RAG_ENABLED` | `false` | Se truthy: abilita il provider vector RAG (vedi sezione successiva). |
-| `ISTEFOX_RAG_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Override modello embedding (es. `BAAI/bge-m3`). Solo se RAG abilitato. |
+| `ISTEFOX_FAST_LIST_DATABASES` | `false` | If truthy (`1`/`true`/`yes`/`on`): `list_databases` skips computing `record_count` (returns `null`). Useful on databases with tens of thousands of records, where `d.contents().length` can take seconds on the first call (the 5-min cache amortizes subsequent calls). Default: count included, behavior unchanged. |
+| `ISTEFOX_PREVIEW_TTL_S` | `300` | Override TTL in seconds for `preview_token` (default 5 minutes). Valid range: 1–3600. |
+| `ISTEFOX_RAG_ENABLED` | `false` | If truthy: enables the vector RAG provider (see next section). |
+| `ISTEFOX_RAG_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Override the embedding model (e.g. `BAAI/bge-m3`). Only used when RAG is enabled. |
 
-**Per installazioni `.mcpb` (Claude Desktop)**: dalla v0.0.22 le 4 variabili sono configurabili dalla UI di Claude Desktop senza editare file. Vai su **Settings → Extensions → istefox-dt-mcp → Configure** e troverai un form con label umani per ciascuna opzione. Modifica + Save + riavvia il server.
+**For `.mcpb` installs (Claude Desktop)**: since v0.0.22 these four variables are configurable from the Claude Desktop UI without editing files. Open **Settings → Extensions → istefox-dt-mcp → Configure** and you'll see a form with human-readable labels for each option. Edit + Save + restart the server.
 
-**Per `pipx`/dev install**: imposta le env var nel tuo shell profile (`~/.zshrc`) o nel comando di lancio.
+**For `pipx`/dev installs**: set the env vars in your shell profile (`~/.zshrc`) or in the launch command.
 
 ## RAG (vector search) — opt-in **experimental**
 
-> **⚠️ Experimental in 0.1.0**: il codice RAG è completo e testato a
-> livello unit, ma il default del modello embedding non è ancora
-> validato cross-corpus. Vedi [ADR-008](docs/adr/0008-embedding-model-selection.md)
-> per i criteri di promozione a default in 0.2.0. Se attivi RAG ora,
-> sappi che la qualità dipende fortemente dal tuo corpus — feedback
-> via GitHub issue molto graditi.
+> **⚠️ Experimental in 0.1.0**: the RAG code is complete and unit-tested, but the embedding model default has not been validated cross-corpus yet. See [ADR-008](docs/adr/0008-embedding-model-selection.md) for the criteria to promote it as the 0.2.0 default. If you enable RAG now, be aware that quality depends heavily on your corpus — feedback via GitHub issues is very welcome.
 
-Il server gira in modalità BM25-only di default (zero overhead, no
-modelli da scaricare). Per attivare la ricerca vettoriale:
+The server runs in BM25-only mode by default (zero overhead, no models to download). To enable vector search:
 
 ```bash
-# 1. Abilita il RAG provider (env var)
+# 1. Enable the RAG provider (env var)
 export ISTEFOX_RAG_ENABLED=1
 
-# 2. (Opzionale) Override modello — default MiniLM-L12-v2
-export ISTEFOX_RAG_MODEL=BAAI/bge-m3   # ~2.2GB, qualità superiore
+# 2. (Optional) Override the model — default is MiniLM-L12-v2
+export ISTEFOX_RAG_MODEL=BAAI/bge-m3   # ~2.2 GB, higher quality
 
-# 3. Indicizza un database DT (one-shot — sync automatico W6)
-uv run istefox-dt-mcp reindex Business
-uv run istefox-dt-mcp reindex privato --limit 100   # test parziale
+# 3. Index a DT database (one-shot — automatic sync covered below)
+uv run istefox-dt-mcp reindex <your-database-name>
+uv run istefox-dt-mcp reindex <your-database-name> --limit 100   # partial test
 
-# 4. Verifica stato indice
+# 4. Verify the index
 uv run istefox-dt-mcp doctor
 # {... "rag": {"indexed_count": N, "embedding_model": "..."}}
 
-# 5. Avvia server e usa search mode=hybrid o ask_database
+# 5. Start the server and use search mode=hybrid or ask_database
 uv run istefox-dt-mcp serve
 ```
 
-ChromaDB embedded persistente in `~/.local/share/istefox-dt-mcp/vectors/`.
-Lazy load: il modello viene scaricato/caricato al primo uso di
-`search` o `ask_database` con mode semantico, non all'avvio.
+ChromaDB is embedded and persisted at `~/.local/share/istefox-dt-mcp/vectors/`. Lazy load: the model is downloaded/loaded on the first call to `search` or `ask_database` in semantic mode, not at startup.
 
-### Sync automatico (W6 — opt-in)
+### Automatic sync (opt-in)
 
-Per indicizzazione incrementale in tempo reale via DT4 smart rule
-+ reconciliation periodica:
+For real-time incremental indexing via DT4 smart rules + periodic reconciliation:
 
 ```bash
-# 1. (Opz.) genera token webhook
+# 1. (Optional) generate a webhook token
 export ISTEFOX_WEBHOOK_TOKEN="$(openssl rand -hex 16)"
 
-# 2. Avvia il daemon
+# 2. Start the daemon
 uv run istefox-dt-mcp watch \
     --port 27205 \
-    --databases Business --databases privato \
-    --reconcile-interval-s 21600   # ogni 6h
+    --databases <your-database-name> \
+    --reconcile-interval-s 21600   # every 6h
 
-# 3. Configura le smart rule DT4 (vedi docs/smart-rules/sync_rag.md)
-# 4. Reconciliation manuale ogni tanto:
-uv run istefox-dt-mcp reconcile Business
+# 3. Configure the DT4 smart rule (see docs/smart-rules/sync_rag.md)
+# 4. Manual reconciliation now and then:
+uv run istefox-dt-mcp reconcile <your-database-name>
 ```
 
-Per auto-start a boot: vedi `docs/smart-rules/sync_rag.md` §"Avvio
-automatico (launchd)".
+For auto-start at boot: see `docs/smart-rules/sync_rag.md` §"launchd auto-start".
 
 ---
 
-## Integrazione Claude Desktop (dev)
+## Claude Desktop integration (dev)
 
-Per gli utenti finali vedi [Quick Install](#quick-install-3-strade). Questa sezione copre il workflow dev (build del bundle e config manuale per source install).
+For end users, see [Quick Install](#quick-install-3-ways). This section covers the dev workflow (bundle build and manual config for source installs).
 
-**Build del bundle `.mcpb`** (richiede solo `bash + zip + unzip`):
+**Build the `.mcpb` bundle** (only requires `bash + zip + unzip`):
 
 ```bash
 ./scripts/build_mcpb.sh
-# Output: dist/istefox-dt-mcp-<version>.mcpb (~270 KB)
+# Output: dist/istefox-dt-mcp-<version>.mcpb (~290 KB)
 ```
 
-Il bundle usa `server.type=uv`: Claude Desktop gestisce il lifecycle Python + `uv sync` al primo avvio.
+The bundle uses `server.type=python` with a bash wrapper (`bundle_main.sh`) that detects `uv` across common install locations (Homebrew, cargo, pipx, mise, asdf, plus the `ISTEFOX_UV_BIN` override). Claude Desktop manages the runtime lifecycle.
 
-**Config manuale `claude_desktop_config.json` (source install)**:
+**Manual `claude_desktop_config.json` (source install)**:
 
 ```json
 {
@@ -369,40 +360,40 @@ Il bundle usa `server.type=uv`: Claude Desktop gestisce il lifecycle Python + `u
 }
 ```
 
-Path: `~/Library/Application Support/Claude/claude_desktop_config.json`. Riavvia Claude Desktop. Tutti i 6 tool sono disponibili.
+Path: `~/Library/Application Support/Claude/claude_desktop_config.json`. Restart Claude Desktop. All six tools become available.
 
-> RAG e altre opzioni: via env var nel processo che lancia `claude` (config manuale) o via UI **Settings → Extensions → Configure** per il bundle (dalla v0.0.22).
+> RAG and other options: via env vars in the process that launches `claude` (manual config) or via the **Settings → Extensions → Configure** UI for the bundle (since v0.0.22).
 
 ---
 
-## Documenti chiave
+## Key documents
 
-| File | Contenuto |
+| File | Contents |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Vincoli obbligatori del progetto (legali, MCP, DT, safety) |
-| [`memory.md`](memory.md) | Decisioni consolidate + decisioni aperte + contesto |
-| [`handoff.md`](handoff.md) | Stato corrente + prossimi passi |
-| [`docs/architecture.md`](docs/architecture.md) | Overview a layer della soluzione |
-| [`docs/adr/`](docs/adr/) | 7 ADR consolidati (stack, bridge, sidecar, MVP, test, DT4, ecc.) |
-| [`docs/adr/REVIEW_ADR.md`](docs/adr/REVIEW_ADR.md) | Architecture review v1.0 (input degli ADR formali) |
-| `ARCH-BRIEF-DT-MCP.md` | Brief architetturale v0.1 (fonte di verità storica) |
+| [`CLAUDE.md`](CLAUDE.md) | Mandatory project constraints (legal, MCP, DT, safety) |
+| [`memory.md`](memory.md) | Consolidated decisions + open questions + context |
+| [`handoff.md`](handoff.md) | Current state + next steps |
+| [`docs/architecture.md`](docs/architecture.md) | Layered overview of the solution |
+| [`docs/adr/`](docs/adr/) | Architecture decision records (stack, bridge, sidecar, MVP, tests, DT4, RAG model) |
+| [`docs/adr/REVIEW_ADR.md`](docs/adr/REVIEW_ADR.md) | Architecture review v1.0 (input to the formal ADRs) |
+| [`ARCH-BRIEF-DT-MCP.md`](ARCH-BRIEF-DT-MCP.md) | Original architecture brief v0.1 (historical source of truth) |
 
-<!-- TODO before 0.1.0 tag:
-     - docs/assets/architecture.svg posizionata qui (diagramma a layer della soluzione)
+<!-- TODO before next release:
+     - docs/assets/architecture.svg belongs here (layered diagram of the solution)
 -->
 
 ---
 
-## Vincoli legali
+## Legal constraints
 
-- **Implementazione clean-room**: nessun codice copiato da [`dvcrn/mcp-server-devonthink`](https://github.com/dvcrn/mcp-server-devonthink) (GPL-3.0).
-- **Privacy by design**: nessun dato dell'utente esce dalla macchina per default. Embedding generati localmente, audit log locale.
-- **Namespace personale**: `istefox` (progetto non lavorativo).
+- **Clean-room implementation**: no code copied from [`dvcrn/mcp-server-devonthink`](https://github.com/dvcrn/mcp-server-devonthink) (GPL-3.0).
+- **Privacy by design**: no user data leaves the machine by default. Embeddings are generated locally; the audit log is local.
+- **Personal namespace**: `istefox` (this is a personal project, not a work project).
 
 ---
 
-## Licenza
+## License
 
 [MIT License](LICENSE) © 2026 Stefano Ferri.
 
-Puoi usare, modificare e ridistribuire il codice (anche commercialmente) mantenendo il copyright notice. Vedi [`LICENSE`](LICENSE) per il testo completo.
+You may use, modify, and redistribute the code (including commercially) as long as you keep the copyright notice. See [`LICENSE`](LICENSE) for the full text.
