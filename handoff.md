@@ -91,21 +91,18 @@ Sessione lunga ~10 ore divisa in 3 fasi.
 
 ## Cose pendenti al riavvio
 
-### Non bloccanti, valore alto
+### In flight (sessione 2026-05-03)
 
-1. **`docs/assets/install.gif`** — drag-and-drop install in Claude Desktop (~5-7s, ≤5MB)
-2. **`docs/assets/demo.gif`** — chat → file_document preview → apply (~12-18s, ≤5MB)
-   - Istruzioni precise nella conversazione precedente: kap.app + gifsicle, beats per timing, setup pre-recording
-   - Una volta create entrambe in `docs/assets/`, sostituisco i 2 TODO HTML nel README
+1. **PR #37 `feat/readme-demo-gifs`** — install.gif + demo.gif piazzate in `docs/assets/`, README aggiornato (entrambi i TODO rimossi). MERGEABLE, CI verde (lint-and-test + mypy ✓). Da mergiare quando confermato visivamente su GitHub web.
+2. **r/devonthink post LIVE** (2026-05-03) come `u/stefferri` — versione asciutta v2 (~200 parole, single-level bullets). Monitorare commenti/feedback nelle 24h.
 
 ### Non bloccanti, valore strategico
 
-3. **Annuncio pubblico** del rilascio 0.1.0:
-   - Post su r/devonthink ("Built an MCP connector for DT4...")
-   - DEVONtechnologies forum sezione Automation
-   - LinkedIn (technical post)
+3. **Annunci paralleli** del rilascio 0.1.0 (dopo merge PR #37):
+   - DEVONtechnologies forum sezione Automation (audience più tecnica di Reddit)
    - Bluesky / X con hashtag #mcp #devonthink
-4. **Submit a `awesome-mcp-servers`** (lista community curated, optional ma boost visibility)
+   - LinkedIn (technical post, opzionale)
+4. **Submit a `awesome-mcp-servers`** (lista community curated, boost discoverability)
 
 ### 0.2.0 roadmap (vedi CHANGELOG sezione Unreleased)
 
