@@ -111,11 +111,12 @@ Sessione lunga ~10 ore divisa in 3 fasi.
 
 ### 0.2.0 roadmap (vedi CHANGELOG sezione Unreleased)
 
+- ✅ **Drift detection 3-stati** (`no_drift` / `already_reverted` / `hostile_drift`) per ridurre falsi positivi `--force` — landed in PR #43 (commit `247141e`, 2026-05-03). Spec + plan sotto `docs/superpowers/specs/` e `docs/superpowers/plans/`. Scope: `file_document` undo. Bulk_apply lasciato a 0.3.0+.
 - RAG benchmark cross-corpus (≥3 corpus, ≥2 early adopter) + flip default modello (ADR-008)
-- Drift detection 3-stati ("no drift" / "already partially undone" / "hostile drift") per ridurre `--force` falso positivo
 - HTTP transport + OAuth multi-device (ADR-006)
 - Tool aggiuntivi: `summarize_topic`, `create_smart_rule`
 - Cassette VCR catturate da DT vivo (oggi sintetiche ma matching shape)
+- Per-op drift detection per `bulk_apply` undo (richiede schema upgrade audit log per per-op after-snapshots)
 
 ---
 
