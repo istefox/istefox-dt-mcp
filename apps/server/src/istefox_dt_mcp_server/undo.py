@@ -17,10 +17,12 @@ Drift detection (v0.0.10+):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 import structlog
+
+from istefox_dt_mcp_schemas.common import Record  # noqa: TC001 — runtime use in compute_drift_state
 
 if TYPE_CHECKING:
     from istefox_dt_mcp_schemas.audit import AuditEntry
@@ -29,6 +31,58 @@ if TYPE_CHECKING:
 
 
 log = structlog.get_logger(__name__)
+
+DriftState = Literal["no_drift", "already_reverted", "hostile_drift"]
+
+
+def compute_drift_state(
+    current: Record,
+    before_state: dict[str, Any],
+    after_state: dict[str, Any] | None,
+) -> DriftState:
+    """Classify current DT record against audit snapshots.
+
+    Order of evaluation (first match wins):
+        1. ``no_drift`` — current matches ``after_state`` (the snapshot
+           captured by file_document immediately after a successful
+           apply). Safe to revert.
+        2. ``already_reverted`` — current matches ``before_state``
+           strictly (location equal AND tag set equal). The user (or
+           an external actor) has restored the pre-apply state;
+           reverting is a no-op.
+        3. ``hostile_drift`` — neither matches. Reverting will overwrite
+           changes; caller must opt in via ``--force``.
+
+    Legacy fallback (``after_state is None``): only ``no_drift`` and
+    ``hostile_drift`` are reachable. ``already_reverted`` requires a
+    captured after-snapshot to disambiguate from the apply target.
+
+    Args:
+        current: Live DT record snapshot (from ``adapter.get_record``).
+        before_state: ``AuditEntry.before_state`` dict; must contain
+            ``location: str`` and ``tags: list[str]``.
+        after_state: ``AuditEntry.after_state`` dict, or ``None`` for
+            legacy entries written before W10.
+
+    Returns:
+        One of ``"no_drift"``, ``"already_reverted"``, ``"hostile_drift"``.
+    """
+    before_location = str(before_state.get("location") or "")
+    before_tags = set(before_state.get("tags") or [])
+
+    if after_state is not None:
+        after_location = str(after_state.get("location") or "")
+        after_tags = set(after_state.get("tags") or [])
+        if current.location == after_location and set(current.tags) == after_tags:
+            return "no_drift"
+        if current.location == before_location and set(current.tags) == before_tags:
+            return "already_reverted"
+        return "hostile_drift"
+
+    # Legacy branch — no after_state, only 2 outcomes possible.
+    if current.location == before_location and set(current.tags) == before_tags:
+        return "no_drift"
+    return "hostile_drift"
 
 
 async def undo_audit(
