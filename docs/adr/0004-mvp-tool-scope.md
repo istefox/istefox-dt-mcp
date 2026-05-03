@@ -77,6 +77,16 @@ Per aggiungere un nuovo tool post-MVP:
 - Spike W1-W2: `file_document` auto-classify/auto-tag su 20 record sintetici → tasso di scelta corretta ≥ 80%
 - Se fail: rinviare `file_document` a v1.5 e tornare a MVP 4 read-only
 
+## Reconsiderations after v1
+
+### `summarize_topic` — included in 0.2.0
+
+The original v1 exclusion rationale ("replicable client-side via `ask_database` + prompt template") is reconsidered for 0.2.0. Server-side clustering produces a *structured shape* (`Cluster[]` with `dimension` / `label` / `count` / `records`) that the client can rely on without doing the grouping itself. The capability is structural, not just a wrapper.
+
+See [the design spec](../superpowers/specs/2026-05-03-summarize-topic-design.md) for the algorithm and constraints. `summarize_topic` is read-only, reuses the existing retrieval layer, adds no new infrastructure.
+
+`bulk_apply` was already moved into v1 during the first reconsideration round (0.0.x series). `create_smart_rule` remains deferred; reconsidered separately for 0.2.0+.
+
 ## Riferimenti
 
 - REVIEW_ADR.md §2 P3, §5, §7 ADR-003
