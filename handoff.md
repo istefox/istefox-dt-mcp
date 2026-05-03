@@ -91,18 +91,21 @@ Sessione lunga ~10 ore divisa in 3 fasi.
 
 ## Cose pendenti al riavvio
 
-### In flight (sessione 2026-05-03)
+### Annunci pubblicati (2026-05-03)
 
-1. **PR #37 `feat/readme-demo-gifs`** — install.gif + demo.gif piazzate in `docs/assets/`, README aggiornato (entrambi i TODO rimossi). MERGEABLE, CI verde (lint-and-test + mypy ✓). Da mergiare quando confermato visivamente su GitHub web.
-2. **r/devonthink post LIVE** (2026-05-03) come `u/stefferri` — versione asciutta v2 (~200 parole, single-level bullets). Monitorare commenti/feedback nelle 24h.
+1. **r/devonthink** — LIVE come `u/stefferri`, draft asciutto v2 (~200 parole, single-level bullets, **bold** invece di `##`). Monitorare commenti/feedback nelle 24-48h.
+2. **discourse.devontechnologies.com** — LIVE in sub-categoria `DEVONthink → Artificial Intelligence` (NB: non `Automation`, scelta consapevole — l'audience AI è auto-selezionata sul tema MCP/LLM). Variante tecnica ~450 parole con 4 punti specifici di feedback richiesto (JXA edge cases, smart-rule patterns, mixed-language DBs, DT3 backcompat).
+3. **`punkpeye/awesome-mcp-servers#5784`** — PR upstream OPEN, in attesa di review del maintainer. Posizione alfabetica corretta in `🧠 Knowledge & Memory` tra `IgorGanapolsky` e `JamesANZ`. Niente Glama badge (lo aggiunge il bot Glama post-merge se indicizza).
 
-### Non bloccanti, valore strategico
+### Annunci ancora da fare (opzionali)
 
-3. **Annunci paralleli** del rilascio 0.1.0 (dopo merge PR #37):
-   - DEVONtechnologies forum sezione Automation (audience più tecnica di Reddit)
-   - Bluesky / X con hashtag #mcp #devonthink
-   - LinkedIn (technical post, opzionale)
-4. **Submit a `awesome-mcp-servers`** (lista community curated, boost discoverability)
+- **Bluesky / X** — versione 280 char con link repo + 1 GIF. Hashtag `#mcp #devonthink #claudeai`. Boost low-medium.
+- **LinkedIn** — taglio "lessons learned tecnici" (clean-room, packaging `.mcpb`, JXA gotchas). Brand professionale, opzionale.
+
+### Cose da monitorare
+
+- Risposte Reddit + forum DT nelle 12-48h → triage in issue/feature request se pertinenti
+- PR #5784 `awesome-mcp-servers` → potrebbe richiedere giorni-settimana, niente da fare oltre rispondere a eventuali commenti di review
 
 ### 0.2.0 roadmap (vedi CHANGELOG sezione Unreleased)
 
