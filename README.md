@@ -4,6 +4,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 [![Release: v0.1.0](https://img.shields.io/badge/release-v0.1.0-brightgreen.svg)](https://github.com/istefox/istefox-dt-mcp/releases/latest)
+[![Listed on Glama](https://glama.ai/mcp/servers/istefox/istefox-dt-mcp/badge)](https://glama.ai/mcp/servers/istefox/istefox-dt-mcp)
 
 MCP server for DEVONthink 4 — outcome-oriented tools, optional local RAG, privacy-first. Stack: Python 3.12 + FastMCP + ChromaDB + uv.
 
@@ -380,6 +381,12 @@ Path: `~/Library/Application Support/Claude/claude_desktop_config.json`. Restart
 - **Clean-room implementation**: no code copied from [`dvcrn/mcp-server-devonthink`](https://github.com/dvcrn/mcp-server-devonthink) (GPL-3.0).
 - **Privacy by design**: no user data leaves the machine by default. Embeddings are generated locally; the audit log is local.
 - **Personal namespace**: `istefox` (this is a personal project, not a work project).
+
+---
+
+## Other MCP servers by istefox
+
+- **[obsidian-mcp-connector](https://github.com/istefox/obsidian-mcp-connector)** — community-continuation fork of `jacksteamdev/obsidian-mcp-tools`. In-process Streamable HTTP MCP server inside Obsidian (no native binary), 20 tools over your vault, native semantic search via Transformers.js. MIT.
 
 ---
 
