@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from istefox_dt_mcp_schemas.common import Record, RecordKind
-from istefox_dt_mcp_server.undo import undo_audit
+from istefox_dt_mcp_server.undo import compute_drift_state, undo_audit
 
 if TYPE_CHECKING:
     from istefox_dt_mcp_server.deps import Deps
@@ -327,8 +327,6 @@ async def test_undo_after_state_diff_is_drift(
 
 
 def test_compute_drift_state_no_drift_exact_match() -> None:
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/Archive", tags=["invoices"])
     before = {"location": "/Inbox", "tags": []}
     after = {"location": "/Archive", "tags": ["invoices"]}
@@ -337,8 +335,6 @@ def test_compute_drift_state_no_drift_exact_match() -> None:
 
 
 def test_compute_drift_state_no_drift_tag_order_irrelevant() -> None:
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/Archive", tags=["b", "a"])
     before = {"location": "/Inbox", "tags": []}
     after = {"location": "/Archive", "tags": ["a", "b"]}
@@ -347,8 +343,6 @@ def test_compute_drift_state_no_drift_tag_order_irrelevant() -> None:
 
 
 def test_compute_drift_state_already_reverted_strict_match() -> None:
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/Inbox", tags=[])
     before = {"location": "/Inbox", "tags": []}
     after = {"location": "/Archive", "tags": ["invoices"]}
@@ -359,8 +353,6 @@ def test_compute_drift_state_already_reverted_strict_match() -> None:
 def test_compute_drift_state_partial_revert_is_hostile() -> None:
     """Strict match: location matches before, but tag from apply is still
     present. Per spec Q1 = A, this is hostile_drift, not already_reverted."""
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/Inbox", tags=["invoices"])
     before = {"location": "/Inbox", "tags": []}
     after = {"location": "/Archive", "tags": ["invoices"]}
@@ -369,8 +361,6 @@ def test_compute_drift_state_partial_revert_is_hostile() -> None:
 
 
 def test_compute_drift_state_unrelated_location_is_hostile() -> None:
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/OPS", tags=["misfiled"])
     before = {"location": "/Inbox", "tags": []}
     after = {"location": "/Archive", "tags": ["invoices"]}
@@ -382,8 +372,6 @@ def test_compute_drift_state_legacy_no_after_state_no_drift() -> None:
     """Pre-W10 audit entry (after_state=None). Without after_state we can
     only return no_drift if current still matches before, otherwise hostile.
     Per spec section 4 legacy fallback: only 2 states reachable."""
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/Inbox", tags=[])
     before = {"location": "/Inbox", "tags": []}
 
@@ -391,8 +379,6 @@ def test_compute_drift_state_legacy_no_after_state_no_drift() -> None:
 
 
 def test_compute_drift_state_legacy_no_after_state_hostile_when_diverged() -> None:
-    from istefox_dt_mcp_server.undo import compute_drift_state
-
     current = _record(location="/OPS", tags=[])
     before = {"location": "/Inbox", "tags": []}
 
