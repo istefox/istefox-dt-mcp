@@ -127,7 +127,7 @@ Full backlog in [`handoff.md`](handoff.md).
 | `PERMISSION_DENIED` (`-1743`) | First Apple Event errors out | **System Settings → Privacy & Security → Automation** → enable the toggle for `DEVONthink` under your terminal or Claude Desktop |
 | `DATABASE_NOT_FOUND` | `file_document` or `bulk_apply` rejects the path | `destination_hint` is missing the database prefix — use `/Inbox/<group>` (with leading slash), not `/<group>` |
 | `uv binary not found` | The `.mcpb` bundle won't start on first run | `brew install uv` (or `curl -LsSf https://astral.sh/uv/install.sh \| sh`), then disable + re-enable the extension in Claude Desktop |
-| `drift_detected: true` (on undo) | Undo refuses to roll back | The record was modified after the original apply. Run `istefox-dt-mcp audit list --recent` for context, then add `--force` if the rollback is still what you want |
+| `drift_state: hostile_drift` (on undo) | Undo refuses to roll back | The record was modified after the original apply by something other than your prior undo. Run `istefox-dt-mcp audit list --recent` for context, inspect `drift_details` in the response, then add `--force` if the rollback is still what you want. **Note:** if `drift_state: already_reverted`, the record is already back to the pre-apply state — no `--force` needed, undo returns a no-op |
 
 For anything not listed: `uv run istefox-dt-mcp doctor` produces a full diagnostic report (DT running, permissions, cache, RAG state).
 
