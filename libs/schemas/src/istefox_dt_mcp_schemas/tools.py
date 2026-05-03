@@ -15,8 +15,9 @@ messages are localized to italian in the server's i18n layer.
 from __future__ import annotations
 
 from datetime import date  # noqa: TC003 — needed by Pydantic at runtime
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .common import (
     Database,
@@ -383,4 +384,77 @@ class UndoResult(StrictModel):
 
 
 class UndoOutput(Envelope[UndoResult]):
+    pass
+
+
+# ----------------------------------------------------------------------
+# summarize_topic (0.2.0 — read tool with server-side clustering)
+# ----------------------------------------------------------------------
+
+
+class SummarizeTopicInput(StrictModel):
+    """Retrieve records related to a topic and group them by dimension.
+
+    Default dimensions are date and tags. The retrieval layer mirrors
+    ``ask_database``: vector if RAG is enabled, BM25 fallback otherwise.
+
+    When to use:
+    - The user wants a panorama / overview of a topic across many records.
+    - You need data already grouped by category (date, tag, kind, location)
+      so you can narrate the structure without doing the grouping yourself.
+
+    Don't use for:
+    - Direct questions with a single answer -> use ``ask_database``.
+    - Listing candidate documents to drill into -> use ``search``.
+
+    Examples:
+    - {"topic": "bollette 2025", "cluster_by": ["date", "tags"]}
+    - {"topic": "Keraglass", "cluster_by": ["kind", "location"]}
+    """
+
+    topic: str = Field(..., min_length=3, max_length=2000)
+    databases: list[str] | None = None
+    cluster_by: list[Literal["date", "tags", "kind", "location"]] = Field(
+        default_factory=lambda: ["date", "tags"],
+        min_length=1,
+        max_length=4,
+    )
+    max_records: int = Field(default=50, ge=1, le=200)
+    max_per_cluster: int = Field(default=10, ge=1, le=50)
+    max_clusters: int = Field(default=10, ge=1, le=50)
+
+    @field_validator("cluster_by")
+    @classmethod
+    def _dedupe_cluster_by(
+        cls, v: list[Literal["date", "tags", "kind", "location"]]
+    ) -> list[Literal["date", "tags", "kind", "location"]]:
+        # Preserve first-occurrence order; drop duplicates.
+        seen: set[str] = set()
+        deduped: list[Literal["date", "tags", "kind", "location"]] = []
+        for item in v:
+            if item not in seen:
+                seen.add(item)
+                deduped.append(item)
+        return deduped
+
+
+class Cluster(StrictModel):
+    """One group of records along a single clustering dimension."""
+
+    dimension: Literal["date", "tags", "kind", "location"]
+    label: str
+    count: int
+    records: list[Citation]
+
+
+class SummarizeTopicResult(StrictModel):
+    """Topic panorama: clusters across requested dimensions."""
+
+    topic: str
+    clusters: list[Cluster]
+    total_records_retrieved: int
+    retrieval_mode: Literal["vector", "bm25"]
+
+
+class SummarizeTopicOutput(Envelope[SummarizeTopicResult]):
     pass
