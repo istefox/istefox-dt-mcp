@@ -185,3 +185,133 @@ def test_cluster_by_tags_max_per_cluster_truncates() -> None:
     assert clusters[0].count == 3
     assert len(clusters[0].records) == 2
     assert clusters[0].records[0].uuid == "b"
+
+
+# ---------- summarize_topic_op (with mocked deps) ----------
+
+
+@pytest.mark.asyncio
+async def test_summarize_topic_op_bm25_path_returns_clusters(deps) -> None:
+    """When RAG is disabled, retrieval uses adapter.search and clusters
+    by date+tags by default."""
+    from unittest.mock import AsyncMock
+
+    from istefox_dt_mcp_schemas.common import SearchResult
+    from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
+
+    from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
+
+    deps.adapter.search = AsyncMock(
+        return_value=[
+            SearchResult(
+                uuid="a",
+                name="A",
+                location="/Inbox",
+                reference_url="x-d://a",
+            ),
+            SearchResult(
+                uuid="b",
+                name="B",
+                location="/Archive",
+                reference_url="x-d://b",
+            ),
+        ]
+    )
+    deps.adapter.get_record = AsyncMock(
+        side_effect=lambda uuid: _record(
+            uuid=uuid,
+            tags=["x"],
+            modification_date=datetime(2026, 1, 1),
+        )
+    )
+
+    result = await summarize_topic_op(
+        deps,
+        SummarizeTopicInput(topic="hello world"),
+    )
+
+    assert result.retrieval_mode == "bm25"
+    assert result.total_records_retrieved == 2
+    dims = {c.dimension for c in result.clusters}
+    assert dims == {"date", "tags"}
+
+
+@pytest.mark.asyncio
+async def test_summarize_topic_op_skips_hydration_failures(deps) -> None:
+    """A record that fails to hydrate is dropped silently, others kept."""
+    from unittest.mock import AsyncMock
+
+    from istefox_dt_mcp_schemas.common import SearchResult
+    from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
+
+    from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
+
+    deps.adapter.search = AsyncMock(
+        return_value=[
+            SearchResult(uuid="ok", name="A", location="/Inbox", reference_url="x-d://ok"),
+            SearchResult(uuid="bad", name="B", location="/Inbox", reference_url="x-d://bad"),
+        ]
+    )
+
+    async def get_record_side_effect(uuid: str):
+        if uuid == "bad":
+            raise RuntimeError("simulated hydration failure")
+        return _record(uuid=uuid, tags=["t"])
+
+    deps.adapter.get_record = AsyncMock(side_effect=get_record_side_effect)
+
+    result = await summarize_topic_op(
+        deps,
+        SummarizeTopicInput(topic="topic"),
+    )
+
+    assert result.total_records_retrieved == 1
+
+
+@pytest.mark.asyncio
+async def test_summarize_topic_op_empty_retrieval_returns_empty_clusters(deps) -> None:
+    from unittest.mock import AsyncMock
+
+    from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
+
+    from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
+
+    deps.adapter.search = AsyncMock(return_value=[])
+    deps.adapter.get_record = AsyncMock()
+
+    result = await summarize_topic_op(
+        deps,
+        SummarizeTopicInput(topic="topic"),
+    )
+
+    assert result.total_records_retrieved == 0
+    assert result.clusters == []
+    deps.adapter.get_record.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_summarize_topic_op_respects_cluster_by_param(deps) -> None:
+    """cluster_by=['kind'] produces only kind-dimension clusters."""
+    from unittest.mock import AsyncMock
+
+    from istefox_dt_mcp_schemas.common import SearchResult
+    from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
+
+    from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
+
+    deps.adapter.search = AsyncMock(
+        return_value=[
+            SearchResult(uuid="a", name="A", location="/Inbox", reference_url="x-d://a"),
+        ]
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(uuid="a", kind=RecordKind.PDF, tags=["t"])
+    )
+
+    result = await summarize_topic_op(
+        deps,
+        SummarizeTopicInput(topic="topic", cluster_by=["kind"]),
+    )
+
+    dims = {c.dimension for c in result.clusters}
+    assert dims == {"kind"}

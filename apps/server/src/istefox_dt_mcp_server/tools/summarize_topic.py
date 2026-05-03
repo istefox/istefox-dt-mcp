@@ -11,13 +11,22 @@ dimensions, with bounded size (default: 10 clusters per dimension,
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 
 import structlog
+from istefox_dt_mcp_adapter.rag import NoopRAGProvider
 from istefox_dt_mcp_schemas.common import Record
-from istefox_dt_mcp_schemas.tools import Citation, Cluster
+from istefox_dt_mcp_schemas.rag import RAGFilter
+from istefox_dt_mcp_schemas.tools import (
+    Citation,
+    Cluster,
+    SummarizeTopicInput,
+    SummarizeTopicOutput,
+    SummarizeTopicResult,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -201,3 +210,107 @@ def _cluster_by_location(
             )
         )
     return out
+
+
+async def _hydrate_records(
+    deps: Deps,
+    hits: list[tuple[str, float]],
+) -> list[tuple[Record, float]]:
+    """Fetch full Record objects for each hit, in parallel.
+
+    Failed fetches are skipped with a warning log. Returns only records
+    that hydrated successfully, paired with their original score.
+    """
+
+    async def _one(uuid: str, score: float) -> tuple[Record, float] | None:
+        try:
+            rec = await deps.adapter.get_record(uuid)
+            return (rec, score)
+        except Exception as e:
+            log.debug("summarize_topic_hydration_failed", uuid=uuid, error=str(e))
+            return None
+
+    results = await asyncio.gather(
+        *(_one(uuid, score) for uuid, score in hits),
+        return_exceptions=False,
+    )
+    return [r for r in results if r is not None]
+
+
+def _synthesize_bm25_scores(n: int) -> list[float]:
+    """Generate descending rank-based scores for BM25 hits.
+
+    BM25 results don't carry a normalized score, but we need ordering
+    inside clusters. Synthesize: position 0 → 1.0, position N-1 → ~0.0.
+    """
+    if n == 0:
+        return []
+    return [1.0 - (i / n) for i in range(n)]
+
+
+CLUSTERER_BY_DIMENSION: dict[str, object] = {
+    "date": _cluster_by_date,
+    "tags": _cluster_by_tags,
+    "kind": _cluster_by_kind,
+    "location": _cluster_by_location,
+}
+
+
+async def summarize_topic_op(
+    deps: Deps,
+    input_data: SummarizeTopicInput,
+) -> SummarizeTopicResult:
+    """Top-level operation: retrieve, hydrate, cluster.
+
+    Args:
+        deps: Wired dependency graph (adapter, rag, cache, audit).
+        input_data: Validated SummarizeTopicInput.
+
+    Returns:
+        SummarizeTopicResult with flat clusters list and retrieval mode.
+    """
+    rag_available = not isinstance(deps.rag, NoopRAGProvider)
+
+    if rag_available:
+        rag_filter = RAGFilter(databases=input_data.databases)
+        rag_hits = await deps.rag.query(
+            input_data.topic, k=input_data.max_records, filters=rag_filter
+        )
+        hits: list[tuple[str, float]] = [(h.uuid, h.score) for h in rag_hits]
+        retrieval_mode: Literal["vector", "bm25"] = "vector"
+    else:
+        bm25_hits = await deps.adapter.search(
+            input_data.topic,
+            databases=input_data.databases,
+            max_results=input_data.max_records,
+        )
+        synthesized = _synthesize_bm25_scores(len(bm25_hits))
+        hits = [(h.uuid, score) for h, score in zip(bm25_hits, synthesized, strict=True)]
+        retrieval_mode = "bm25"
+
+    log.debug(
+        "summarize_topic_retrieved",
+        mode=retrieval_mode,
+        n_hits=len(hits),
+        topic_chars=len(input_data.topic),
+    )
+
+    records = await _hydrate_records(deps, hits)
+
+    clusters: list[Cluster] = []
+    for dimension in input_data.cluster_by:
+        clusterer = CLUSTERER_BY_DIMENSION[dimension]
+        clusters.extend(
+            clusterer(  # type: ignore[operator]
+                records,
+                max_clusters=input_data.max_clusters,
+                max_per_cluster=input_data.max_per_cluster,
+            )
+        )
+
+    return SummarizeTopicResult(
+        topic=input_data.topic,
+        clusters=clusters,
+        total_records_retrieved=len(records),
+        retrieval_mode=retrieval_mode,
+    )
