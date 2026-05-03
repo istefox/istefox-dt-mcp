@@ -95,3 +95,109 @@ def _record_to_citation(rec: Record) -> Citation:
         snippet="",
         reference_url=rec.reference_url,
     )
+
+
+def _cluster_by_tags(
+    records: list[tuple[Record, float]],
+    *,
+    max_clusters: int,
+    max_per_cluster: int,
+) -> list[Cluster]:
+    """Group records by tag. Multi-tag records appear in multiple clusters.
+
+    Sort clusters by record count desc, break ties alphabetically.
+    """
+    if not records:
+        return []
+
+    groups: dict[str, list[tuple[Record, float]]] = defaultdict(list)
+    for rec, score in records:
+        for tag in rec.tags:
+            groups[tag].append((rec, score))
+
+    if not groups:
+        return []
+
+    sorted_labels = sorted(groups.keys(), key=lambda k: (-len(groups[k]), k))
+    sorted_labels = sorted_labels[:max_clusters]
+
+    out: list[Cluster] = []
+    for label in sorted_labels:
+        bucket = groups[label]
+        bucket.sort(key=lambda pair: pair[1], reverse=True)
+        top = bucket[:max_per_cluster]
+        out.append(
+            Cluster(
+                dimension="tags",
+                label=label,
+                count=len(bucket),
+                records=[_record_to_citation(rec) for rec, _ in top],
+            )
+        )
+    return out
+
+
+def _cluster_by_kind(
+    records: list[tuple[Record, float]],
+    *,
+    max_clusters: int,
+    max_per_cluster: int,
+) -> list[Cluster]:
+    """Group records by RecordKind enum value. Sort by count desc."""
+    if not records:
+        return []
+
+    groups: dict[str, list[tuple[Record, float]]] = defaultdict(list)
+    for rec, score in records:
+        groups[rec.kind.value].append((rec, score))
+
+    sorted_labels = sorted(groups.keys(), key=lambda k: (-len(groups[k]), k))
+    sorted_labels = sorted_labels[:max_clusters]
+
+    out: list[Cluster] = []
+    for label in sorted_labels:
+        bucket = groups[label]
+        bucket.sort(key=lambda pair: pair[1], reverse=True)
+        top = bucket[:max_per_cluster]
+        out.append(
+            Cluster(
+                dimension="kind",
+                label=label,
+                count=len(bucket),
+                records=[_record_to_citation(rec) for rec, _ in top],
+            )
+        )
+    return out
+
+
+def _cluster_by_location(
+    records: list[tuple[Record, float]],
+    *,
+    max_clusters: int,
+    max_per_cluster: int,
+) -> list[Cluster]:
+    """Group records by full location path. Sort by count desc."""
+    if not records:
+        return []
+
+    groups: dict[str, list[tuple[Record, float]]] = defaultdict(list)
+    for rec, score in records:
+        groups[rec.location].append((rec, score))
+
+    sorted_labels = sorted(groups.keys(), key=lambda k: (-len(groups[k]), k))
+    sorted_labels = sorted_labels[:max_clusters]
+
+    out: list[Cluster] = []
+    for label in sorted_labels:
+        bucket = groups[label]
+        bucket.sort(key=lambda pair: pair[1], reverse=True)
+        top = bucket[:max_per_cluster]
+        out.append(
+            Cluster(
+                dimension="location",
+                label=label,
+                count=len(bucket),
+                records=[_record_to_citation(rec) for rec, _ in top],
+            )
+        )
+    return out
