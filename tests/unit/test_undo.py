@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from istefox_dt_mcp_schemas.common import Record, RecordKind
-from istefox_dt_mcp_server.undo import undo_audit
+from istefox_dt_mcp_server.undo import compute_drift_state, undo_audit
 
 if TYPE_CHECKING:
     from istefox_dt_mcp_server.deps import Deps
@@ -321,3 +321,190 @@ async def test_undo_after_state_diff_is_drift(
     blocked = await undo_audit(deps, audit_id, dry_run=False, force=False)
     assert blocked["reverted"] is False
     assert blocked["drift_detected"] is True
+
+
+# ---------- compute_drift_state (3-state classifier) ----------
+
+
+def test_compute_drift_state_no_drift_exact_match() -> None:
+    current = _record(location="/Archive", tags=["invoices"])
+    before = {"location": "/Inbox", "tags": []}
+    after = {"location": "/Archive", "tags": ["invoices"]}
+
+    assert compute_drift_state(current, before, after) == "no_drift"
+
+
+def test_compute_drift_state_no_drift_tag_order_irrelevant() -> None:
+    current = _record(location="/Archive", tags=["b", "a"])
+    before = {"location": "/Inbox", "tags": []}
+    after = {"location": "/Archive", "tags": ["a", "b"]}
+
+    assert compute_drift_state(current, before, after) == "no_drift"
+
+
+def test_compute_drift_state_already_reverted_strict_match() -> None:
+    current = _record(location="/Inbox", tags=[])
+    before = {"location": "/Inbox", "tags": []}
+    after = {"location": "/Archive", "tags": ["invoices"]}
+
+    assert compute_drift_state(current, before, after) == "already_reverted"
+
+
+def test_compute_drift_state_partial_revert_is_hostile() -> None:
+    """Strict match: location matches before, but tag from apply is still
+    present. Per spec Q1 = A, this is hostile_drift, not already_reverted."""
+    current = _record(location="/Inbox", tags=["invoices"])
+    before = {"location": "/Inbox", "tags": []}
+    after = {"location": "/Archive", "tags": ["invoices"]}
+
+    assert compute_drift_state(current, before, after) == "hostile_drift"
+
+
+def test_compute_drift_state_unrelated_location_is_hostile() -> None:
+    current = _record(location="/OPS", tags=["misfiled"])
+    before = {"location": "/Inbox", "tags": []}
+    after = {"location": "/Archive", "tags": ["invoices"]}
+
+    assert compute_drift_state(current, before, after) == "hostile_drift"
+
+
+def test_compute_drift_state_legacy_no_after_state_no_drift() -> None:
+    """Pre-W10 audit entry (after_state=None). Without after_state we can
+    only return no_drift if current still matches before, otherwise hostile.
+    Per spec section 4 legacy fallback: only 2 states reachable."""
+    current = _record(location="/Inbox", tags=[])
+    before = {"location": "/Inbox", "tags": []}
+
+    assert compute_drift_state(current, before, None) == "no_drift"
+
+
+def test_compute_drift_state_legacy_no_after_state_hostile_when_diverged() -> None:
+    current = _record(location="/OPS", tags=[])
+    before = {"location": "/Inbox", "tags": []}
+
+    assert compute_drift_state(current, before, None) == "hostile_drift"
+
+
+# ---------- undo_audit dispatching on drift_state ----------
+
+
+@pytest.mark.asyncio
+async def test_undo_already_reverted_no_force_returns_noop(deps: Deps) -> None:
+    """current matches before_state → already_reverted, no JXA mutation."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        after_location="/Archive",
+        after_tags=["invoices"],
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(location="/Inbox", tags=[])
+    )
+    deps.adapter.move_record = AsyncMock()
+    deps.adapter.remove_tag = AsyncMock()
+
+    result = await undo_audit(deps, audit_id, dry_run=False, force=False)
+
+    assert result["reverted"] is False
+    assert result["drift_state"] == "already_reverted"
+    assert result["drift_detected"] is False
+    assert "already" in str(result["message"]).lower()
+    assert "force_ignored" not in result
+    deps.adapter.move_record.assert_not_called()
+    deps.adapter.remove_tag.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_undo_already_reverted_with_force_ignores_force(deps: Deps) -> None:
+    """--force in already_reverted: response flags force_ignored, no JXA call."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        after_location="/Archive",
+        after_tags=["invoices"],
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(location="/Inbox", tags=[])
+    )
+    deps.adapter.move_record = AsyncMock()
+    deps.adapter.remove_tag = AsyncMock()
+
+    result = await undo_audit(deps, audit_id, dry_run=False, force=True)
+
+    assert result["reverted"] is False
+    assert result["drift_state"] == "already_reverted"
+    assert result.get("force_ignored") is True
+    deps.adapter.move_record.assert_not_called()
+    deps.adapter.remove_tag.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_undo_no_drift_includes_drift_state_field(deps: Deps) -> None:
+    """Existing no-drift path: drift_state="no_drift", drift_detected=False."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        after_location="/Archive",
+        after_tags=["invoices"],
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(location="/Archive", tags=["invoices"])
+    )
+    deps.adapter.move_record = AsyncMock()
+    deps.adapter.remove_tag = AsyncMock()
+
+    result = await undo_audit(deps, audit_id, dry_run=False, force=False)
+
+    assert result["reverted"] is True
+    assert result["drift_state"] == "no_drift"
+    assert result["drift_detected"] is False
+    deps.adapter.move_record.assert_called_once_with("u", "/Inbox", dry_run=False)
+    deps.adapter.remove_tag.assert_called_once_with("u", "invoices", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_undo_hostile_drift_no_force_blocks(deps: Deps) -> None:
+    """Existing hostile-drift path: drift_state="hostile_drift", blocked."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        after_location="/Archive",
+        after_tags=["invoices"],
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(location="/OPS", tags=["misfiled"])
+    )
+
+    result = await undo_audit(deps, audit_id, dry_run=False, force=False)
+
+    assert result["reverted"] is False
+    assert result["drift_state"] == "hostile_drift"
+    assert result["drift_detected"] is True
+    assert "drift_details" in result
+
+
+@pytest.mark.asyncio
+async def test_undo_hostile_drift_with_force_proceeds(deps: Deps) -> None:
+    """--force in hostile_drift overrides as today."""
+    audit_id = _audit_file_document(
+        deps,
+        before_location="/Inbox",
+        before_tags=[],
+        after_location="/Archive",
+        after_tags=["invoices"],
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(location="/OPS", tags=["misfiled"])
+    )
+    deps.adapter.move_record = AsyncMock()
+    deps.adapter.remove_tag = AsyncMock()
+
+    result = await undo_audit(deps, audit_id, dry_run=False, force=True)
+
+    assert result["reverted"] is True
+    assert result["drift_state"] == "hostile_drift"
+    deps.adapter.move_record.assert_called()

@@ -2,33 +2,94 @@
 
 Looks up the audit_id, reads `before_state` (the original record
 snapshot) and `after_state` (the snapshot we expected immediately
-after the write), and reverses the write surgically. v0.0.7 supports
-`file_document` only.
+after the write), and reverses the write surgically. Supports
+`file_document` (3-state drift detection) and `bulk_apply` (binary
+drift detection — bulk has no per-op after-snapshots yet).
 
-Drift detection (v0.0.10+):
-- If `after_state` is present in the audit entry, drift = the current
-  DT state diverges from after_state. This is the precise check.
-- If `after_state` is missing (legacy entries pre-W10), fall back to
-  the heuristic that compares current.location against the original
-  destination_hint.
+Drift detection 3-state (file_document, 0.2.0+):
+- `no_drift`: current DT state matches `after_state`. Revert proceeds.
+- `already_reverted`: current matches `before_state` strictly. Undo
+  is a no-op; --force is ignored.
+- `hostile_drift`: current matches neither. Revert blocked unless
+  --force.
 
-`drift_detected=True` blocks the revert unless `force=True`.
+Legacy fallback (audit entries pre-W10 with no `after_state`):
+classifier collapses to 2 states (no_drift / hostile_drift). The
+`destination_hint` heuristic is used to disambiguate the apply target
+from arbitrary user moves. `already_reverted` is structurally
+unreachable for legacy entries.
+
+Response always includes `drift_state: str` and the legacy
+`drift_detected: bool` (true iff hostile_drift).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 import structlog
 
 if TYPE_CHECKING:
     from istefox_dt_mcp_schemas.audit import AuditEntry
+    from istefox_dt_mcp_schemas.common import Record
 
     from .deps import Deps
 
 
 log = structlog.get_logger(__name__)
+
+DriftState = Literal["no_drift", "already_reverted", "hostile_drift"]
+
+
+def compute_drift_state(
+    current: Record,
+    before_state: dict[str, Any],
+    after_state: dict[str, Any] | None,
+) -> DriftState:
+    """Classify current DT record against audit snapshots.
+
+    Order of evaluation (first match wins):
+        1. ``no_drift`` — current matches ``after_state`` (the snapshot
+           captured by file_document immediately after a successful
+           apply). Safe to revert.
+        2. ``already_reverted`` — current matches ``before_state``
+           strictly (location equal AND tag set equal). The user (or
+           an external actor) has restored the pre-apply state;
+           reverting is a no-op.
+        3. ``hostile_drift`` — neither matches. Reverting will overwrite
+           changes; caller must opt in via ``--force``.
+
+    Legacy fallback (``after_state is None``): only ``no_drift`` and
+    ``hostile_drift`` are reachable. ``already_reverted`` requires a
+    captured after-snapshot to disambiguate from the apply target.
+
+    Args:
+        current: Live DT record snapshot (from ``adapter.get_record``).
+        before_state: ``AuditEntry.before_state`` dict; must contain
+            ``location: str`` and ``tags: list[str]``.
+        after_state: ``AuditEntry.after_state`` dict, or ``None`` for
+            legacy entries written before W10.
+
+    Returns:
+        One of ``"no_drift"``, ``"already_reverted"``, ``"hostile_drift"``.
+    """
+    before_location = str(before_state.get("location") or "")
+    before_tags = set(before_state.get("tags") or [])
+
+    if after_state is not None:
+        after_location = str(after_state.get("location") or "")
+        after_tags = set(after_state.get("tags") or [])
+        if current.location == after_location and set(current.tags) == after_tags:
+            return "no_drift"
+        if current.location == before_location and set(current.tags) == before_tags:
+            return "already_reverted"
+        return "hostile_drift"
+
+    # Legacy branch — no after_state, only 2 outcomes possible.
+    if current.location == before_location and set(current.tags) == before_tags:
+        return "no_drift"
+    return "hostile_drift"
 
 
 async def undo_audit(
@@ -103,26 +164,63 @@ async def undo_audit(
     before_location = str(entry.before_state.get("location") or "")
     before_tags: list[str] = list(entry.before_state.get("tags") or [])
 
-    # Compute tags to remove and drift status. With after_state
-    # available (W10+) we know exactly what the op produced and can
-    # tell apart "user changed it" from "this is what we applied".
+    drift_state = compute_drift_state(current, entry.before_state, entry.after_state)
+
+    # Legacy override: when after_state is absent, compute_drift_state can
+    # only tell apart "current == before" (no_drift in legacy branch) from
+    # "current != before" (hostile_drift). But if the input carried a
+    # destination_hint and the record is still there, it was the apply that
+    # moved it — not an external actor. Promote hostile_drift → no_drift.
+    if (
+        entry.after_state is None
+        and drift_state == "hostile_drift"
+        and _is_first_undo(current.location, input_data)
+    ):
+        drift_state = "no_drift"
+
+    # Tags added by the original apply (used by the revert path to know
+    # which tags to strip). With after_state available we know exactly
+    # what was added; in the legacy branch we infer from current.
     if entry.after_state is not None:
-        after_location = str(entry.after_state.get("location") or "")
         after_tags = set(entry.after_state.get("tags") or [])
         tags_added = sorted(after_tags - set(before_tags))
-        drift_detected = (
-            current.location != after_location or set(current.tags) != after_tags
-        )
     else:
-        # Legacy fallback (pre-W10 audit entries): infer tags added
-        # from current minus before, and check drift by comparing the
-        # current location to the original destination_hint.
         tags_added = [t for t in current.tags if t not in before_tags]
-        drift_detected = current.location != before_location and not _is_first_undo(
-            current.location, input_data
-        )
 
-    if drift_detected and not force:
+    if drift_state == "already_reverted":
+        # User restored the pre-apply state on their own. Undo is a
+        # no-op; --force is ignored (it has meaning only in
+        # hostile_drift). Surface the matched-against snapshot for
+        # visibility.
+        if force:
+            log.info(
+                "force_unused",
+                audit_id=str(audit_id_obj),
+                reason="already_reverted",
+            )
+        return {
+            "audit_id": str(audit_id_obj),
+            "target_record_uuid": target_uuid,
+            "reverted": False,
+            "drift_detected": False,
+            "drift_state": "already_reverted",
+            "drift_details": {
+                "matched_against": "before_state",
+                "location": {
+                    "current": current.location,
+                    "before": before_location,
+                },
+                "tags": {
+                    "current": sorted(current.tags),
+                    "before": sorted(before_tags),
+                },
+            },
+            **({"force_ignored": True} if force else {}),
+            "message": "record already in pre-apply state, nothing to revert",
+            "dry_run": dry_run,
+        }
+
+    if drift_state == "hostile_drift" and not force:
         # Surface WHAT diverged so the user can decide if it's a real
         # external edit (then probably don't undo) or a false positive
         # (e.g. DT auto-added a tag, sorted tags differently, returned
@@ -159,6 +257,7 @@ async def undo_audit(
             "target_record_uuid": target_uuid,
             "reverted": False,
             "drift_detected": True,
+            "drift_state": "hostile_drift",
             "drift_details": drift_details,
             "message": (
                 "record moved/edited since the original write; pass --force "
@@ -172,7 +271,8 @@ async def undo_audit(
             "audit_id": str(audit_id_obj),
             "target_record_uuid": target_uuid,
             "reverted": False,
-            "drift_detected": drift_detected,
+            "drift_detected": drift_state == "hostile_drift",
+            "drift_state": drift_state,
             "message": "dry_run preview",
             "would_revert": {
                 "move_to": before_location,
@@ -198,7 +298,8 @@ async def undo_audit(
         "audit_id": str(audit_id_obj),
         "target_record_uuid": target_uuid,
         "reverted": True,
-        "drift_detected": drift_detected,
+        "drift_detected": drift_state == "hostile_drift",
+        "drift_state": drift_state,
         "message": "ok",
         "dry_run": dry_run,
     }
@@ -208,8 +309,9 @@ def _is_first_undo(current_location: str, input_data: dict[str, object]) -> bool
     """Best-effort check that the current location matches what the
     original `file_document` call applied (not arbitrary user drift).
 
-    In v0.0.7 we don't store the after-state explicitly, so this is
-    a heuristic: if the input had `destination_hint`, compare to it.
+    Used only in the legacy path where after_state is absent. If the
+    input had `destination_hint`, compare to it; a match means the
+    record is still where the apply left it — not externally moved.
     """
     hint = input_data.get("destination_hint")
     return isinstance(hint, str) and hint == current_location

@@ -5,6 +5,30 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
+### Added (drift detection 3-state)
+
+- `undo` of `file_document` now classifies drift into three states instead of
+  two: `no_drift`, `already_reverted`, `hostile_drift`. Response gains a new
+  `drift_state` field next to the legacy `drift_detected: bool`.
+- `already_reverted` (record matches `before_state` strictly): undo returns a
+  successful no-op and **does not require `--force`**. If `--force` is passed
+  it's logged as `force_unused` and surfaced in the response as
+  `force_ignored: true`.
+- `--force` semantics narrowed: only relevant for `hostile_drift` (record in
+  a state that matches neither `before_state` nor `after_state`).
+- `compute_drift_state(current, before_state, after_state)` exposed as a pure
+  helper in `istefox_dt_mcp_server.undo` for testing and downstream tooling.
+
+### Compatibility
+
+- No `AuditEntry` schema change; existing audit rows in `audit.sqlite` work
+  as-is. Legacy entries written before W10 (no `after_state`) continue under
+  the binary fallback (only `no_drift` / `hostile_drift` reachable).
+- Existing `drift_detected: bool` semantics preserved: `true` only for
+  `hostile_drift`.
+- Scope limited to `file_document` undo. `bulk_apply` undo is unchanged
+  (deferred to 0.3.0+).
+
 ### Planned for 0.2.0
 - RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default modello (ADR-008)
 - Drift detection 3-state ("no drift" / "already partially undone" / "hostile drift")
