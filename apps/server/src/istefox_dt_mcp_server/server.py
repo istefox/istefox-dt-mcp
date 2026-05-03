@@ -17,6 +17,7 @@ from .tools import file_document as tool_file_document
 from .tools import find_related as tool_find_related
 from .tools import list_databases as tool_list_databases
 from .tools import search as tool_search
+from .tools import summarize_topic as tool_summarize_topic
 
 if TYPE_CHECKING:
     from .deps import Deps
@@ -53,5 +54,6 @@ def build_server(deps: Deps | None = None) -> FastMCP:
     tool_ask_database.register(mcp, deps)
     tool_file_document.register(mcp, deps)
     tool_bulk_apply.register(mcp, deps)
+    tool_summarize_topic.register(mcp, deps)
 
     return mcp

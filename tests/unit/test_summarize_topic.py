@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 import pytest
 from istefox_dt_mcp_schemas.common import Record, RecordKind
-
 from istefox_dt_mcp_server.tools.summarize_topic import _cluster_by_date
-
-if TYPE_CHECKING:
-    pass
 
 
 def _record(
@@ -198,7 +193,6 @@ async def test_summarize_topic_op_bm25_path_returns_clusters(deps) -> None:
 
     from istefox_dt_mcp_schemas.common import SearchResult
     from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
-
     from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
 
     deps.adapter.search = AsyncMock(
@@ -243,13 +237,16 @@ async def test_summarize_topic_op_skips_hydration_failures(deps) -> None:
 
     from istefox_dt_mcp_schemas.common import SearchResult
     from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
-
     from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
 
     deps.adapter.search = AsyncMock(
         return_value=[
-            SearchResult(uuid="ok", name="A", location="/Inbox", reference_url="x-d://ok"),
-            SearchResult(uuid="bad", name="B", location="/Inbox", reference_url="x-d://bad"),
+            SearchResult(
+                uuid="ok", name="A", location="/Inbox", reference_url="x-d://ok"
+            ),
+            SearchResult(
+                uuid="bad", name="B", location="/Inbox", reference_url="x-d://bad"
+            ),
         ]
     )
 
@@ -273,7 +270,6 @@ async def test_summarize_topic_op_empty_retrieval_returns_empty_clusters(deps) -
     from unittest.mock import AsyncMock
 
     from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
-
     from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
 
     deps.adapter.search = AsyncMock(return_value=[])
@@ -296,12 +292,13 @@ async def test_summarize_topic_op_respects_cluster_by_param(deps) -> None:
 
     from istefox_dt_mcp_schemas.common import SearchResult
     from istefox_dt_mcp_schemas.tools import SummarizeTopicInput
-
     from istefox_dt_mcp_server.tools.summarize_topic import summarize_topic_op
 
     deps.adapter.search = AsyncMock(
         return_value=[
-            SearchResult(uuid="a", name="A", location="/Inbox", reference_url="x-d://a"),
+            SearchResult(
+                uuid="a", name="A", location="/Inbox", reference_url="x-d://a"
+            ),
         ]
     )
     deps.adapter.get_record = AsyncMock(

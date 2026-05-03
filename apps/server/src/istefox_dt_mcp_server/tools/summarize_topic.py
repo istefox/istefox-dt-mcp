@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 
 import structlog
 from istefox_dt_mcp_adapter.rag import NoopRAGProvider
-from istefox_dt_mcp_schemas.common import Record
 from istefox_dt_mcp_schemas.rag import RAGFilter
 from istefox_dt_mcp_schemas.tools import (
     Citation,
@@ -30,6 +28,7 @@ from istefox_dt_mcp_schemas.tools import (
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+    from istefox_dt_mcp_schemas.common import Record
 
     from ..deps import Deps
 
@@ -285,7 +284,9 @@ async def summarize_topic_op(
             max_results=input_data.max_records,
         )
         synthesized = _synthesize_bm25_scores(len(bm25_hits))
-        hits = [(h.uuid, score) for h, score in zip(bm25_hits, synthesized, strict=True)]
+        hits = [
+            (h.uuid, score) for h, score in zip(bm25_hits, synthesized, strict=True)
+        ]
         retrieval_mode = "bm25"
 
     log.debug(
@@ -314,3 +315,23 @@ async def summarize_topic_op(
         total_records_retrieved=len(records),
         retrieval_mode=retrieval_mode,
     )
+
+
+def register(mcp: FastMCP, deps: Deps) -> None:
+    """Wire the summarize_topic MCP tool to the FastMCP server."""
+    from ._common import safe_call
+
+    @mcp.tool()
+    async def summarize_topic(
+        input: SummarizeTopicInput,  # noqa: A002 — same
+    ) -> SummarizeTopicOutput:
+        async def op() -> SummarizeTopicResult:
+            return await summarize_topic_op(deps, input)
+
+        return await safe_call(
+            tool_name="summarize_topic",
+            input_data=input.model_dump(),
+            deps=deps,
+            operation=op,
+            output_factory=SummarizeTopicOutput,
+        )
