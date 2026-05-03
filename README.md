@@ -57,11 +57,7 @@ uv run istefox-dt-mcp doctor
 
 See [Setup](#setup) for full details (macOS permissions, install troubleshooting).
 
-<!-- TODO before next release:
-     - docs/assets/install.gif (Claude Desktop install of .mcpb, ~5s loop, ≤5MB)
-     - docs/assets/demo.gif (chat → file_document preview → apply → undo, ~15s)
-     Capture: kap.app or Gifox; optimize: gifsicle -O3
--->
+![Installing istefox-dt-mcp in Claude Desktop — drag the .mcpb bundle into Settings → Extensions](docs/assets/install.gif)
 
 ---
 
@@ -93,9 +89,7 @@ Examples of natural prompts and the MCP tool each one triggers. All examples ass
 
 Write tools (`file_document`, `bulk_apply`) are **dry-run by default**: the first call always returns a preview. Apply requires an explicit `confirm_token`. The returned `audit_id` enables selective `undo` via the CLI.
 
-<!-- TODO before next release:
-     - docs/assets/demo.gif belongs here (chat → file_document preview → apply → undo)
--->
+![End-to-end demo: natural prompt in Claude → file_document preview (dry-run) → confirm → applied with audit_id](docs/assets/demo.gif)
 
 ---
 
