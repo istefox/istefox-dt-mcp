@@ -95,7 +95,9 @@ Sessione lunga ~10 ore divisa in 3 fasi.
 
 1. **r/devonthink** — LIVE come `u/stefferri`, draft asciutto v2 (~200 parole, single-level bullets, **bold** invece di `##`). Monitorare commenti/feedback nelle 24-48h.
 2. **discourse.devontechnologies.com** — LIVE in sub-categoria `DEVONthink → Artificial Intelligence` (NB: non `Automation`, scelta consapevole — l'audience AI è auto-selezionata sul tema MCP/LLM). Variante tecnica ~450 parole con 4 punti specifici di feedback richiesto (JXA edge cases, smart-rule patterns, mixed-language DBs, DT3 backcompat).
-3. **`punkpeye/awesome-mcp-servers#5784`** — PR upstream OPEN, in attesa di review del maintainer. Posizione alfabetica corretta in `🧠 Knowledge & Memory` tra `IgorGanapolsky` e `JamesANZ`. Niente Glama badge (lo aggiunge il bot Glama post-merge se indicizza).
+3. **`punkpeye/awesome-mcp-servers#5784`** — PR upstream OPEN + bot-validated (`check-submission: pass`, `mergeStateStatus: CLEAN`), in attesa di review del maintainer. Posizione alfabetica corretta in `🧠 Knowledge & Memory` tra `IgorGanapolsky` e `JamesANZ`. **Glama badge live + Glama release pubblicata** (build success in 14s su cache hit, instance logs confermano introspection completa: tools/list, prompts/list, resources/list).
+4. **Glama directory** — LIVE su `glama.ai/mcp/servers/istefox/istefox-dt-mcp`, server claimed (badge "Official"), Dockerfile config validato (debian:trixie-slim + Python 3.12 + uv + mcp-proxy stdio). Score iniziale `A-B`.
+5. **Repo Dockerfile** (`a2b8af2`) — non strettamente necessario per Glama (loro generano il proprio), ma utile collateralmente per CI futuri / sviluppo isolato. Lasciato in repo.
 
 ### Annunci ancora da fare (opzionali)
 
