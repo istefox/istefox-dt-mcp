@@ -2,17 +2,25 @@
 
 Looks up the audit_id, reads `before_state` (the original record
 snapshot) and `after_state` (the snapshot we expected immediately
-after the write), and reverses the write surgically. v0.0.7 supports
-`file_document` only.
+after the write), and reverses the write surgically. Supports
+`file_document` (3-state drift detection) and `bulk_apply` (binary
+drift detection — bulk has no per-op after-snapshots yet).
 
-Drift detection (v0.0.10+):
-- If `after_state` is present in the audit entry, drift = the current
-  DT state diverges from after_state. This is the precise check.
-- If `after_state` is missing (legacy entries pre-W10), fall back to
-  the heuristic that compares current.location against the original
-  destination_hint.
+Drift detection 3-state (file_document, 0.2.0+):
+- `no_drift`: current DT state matches `after_state`. Revert proceeds.
+- `already_reverted`: current matches `before_state` strictly. Undo
+  is a no-op; --force is ignored.
+- `hostile_drift`: current matches neither. Revert blocked unless
+  --force.
 
-`drift_detected=True` blocks the revert unless `force=True`.
+Legacy fallback (audit entries pre-W10 with no `after_state`):
+classifier collapses to 2 states (no_drift / hostile_drift). The
+`destination_hint` heuristic is used to disambiguate the apply target
+from arbitrary user moves. `already_reverted` is structurally
+unreachable for legacy entries.
+
+Response always includes `drift_state: str` and the legacy
+`drift_detected: bool` (true iff hostile_drift).
 """
 
 from __future__ import annotations
@@ -163,8 +171,10 @@ async def undo_audit(
     # "current != before" (hostile_drift). But if the input carried a
     # destination_hint and the record is still there, it was the apply that
     # moved it — not an external actor. Promote hostile_drift → no_drift.
-    if entry.after_state is None and drift_state == "hostile_drift" and _is_first_undo(
-        current.location, input_data
+    if (
+        entry.after_state is None
+        and drift_state == "hostile_drift"
+        and _is_first_undo(current.location, input_data)
     ):
         drift_state = "no_drift"
 

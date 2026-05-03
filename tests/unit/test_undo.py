@@ -410,6 +410,7 @@ async def test_undo_already_reverted_no_force_returns_noop(deps: Deps) -> None:
     assert result["drift_state"] == "already_reverted"
     assert result["drift_detected"] is False
     assert "already" in str(result["message"]).lower()
+    assert "force_ignored" not in result
     deps.adapter.move_record.assert_not_called()
     deps.adapter.remove_tag.assert_not_called()
 
@@ -460,6 +461,8 @@ async def test_undo_no_drift_includes_drift_state_field(deps: Deps) -> None:
     assert result["reverted"] is True
     assert result["drift_state"] == "no_drift"
     assert result["drift_detected"] is False
+    deps.adapter.move_record.assert_called_once_with("u", "/Inbox", dry_run=False)
+    deps.adapter.remove_tag.assert_called_once_with("u", "invoices", dry_run=False)
 
 
 @pytest.mark.asyncio
