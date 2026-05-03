@@ -392,6 +392,10 @@ class UndoOutput(Envelope[UndoResult]):
 # ----------------------------------------------------------------------
 
 
+def _default_cluster_by() -> list[Literal["date", "tags", "kind", "location"]]:
+    return ["date", "tags"]
+
+
 class SummarizeTopicInput(StrictModel):
     """Retrieve records related to a topic and group them by dimension.
 
@@ -415,7 +419,7 @@ class SummarizeTopicInput(StrictModel):
     topic: str = Field(..., min_length=3, max_length=2000)
     databases: list[str] | None = None
     cluster_by: list[Literal["date", "tags", "kind", "location"]] = Field(
-        default_factory=lambda: ["date", "tags"],
+        default_factory=_default_cluster_by,
         min_length=1,
         max_length=4,
     )

@@ -157,7 +157,10 @@ def _cluster_by_kind(
 
     groups: dict[str, list[tuple[Record, float]]] = defaultdict(list)
     for rec, score in records:
-        groups[rec.kind.value].append((rec, score))
+        # Record.kind is `RecordKind | str`; both stringify to the
+        # enum value (StrEnum.__str__ returns its value), so str() is
+        # safe regardless of which the adapter produced.
+        groups[str(rec.kind)].append((rec, score))
 
     sorted_labels = sorted(groups.keys(), key=lambda k: (-len(groups[k]), k))
     sorted_labels = sorted_labels[:max_clusters]
