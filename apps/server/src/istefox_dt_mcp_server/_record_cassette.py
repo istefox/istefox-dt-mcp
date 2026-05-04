@@ -212,7 +212,9 @@ DEFAULT_INPUTS: dict[str, dict[str, Any]] = {
     },
     "move_record": {
         "uuid": "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA",
-        "destination": "/Archive",
+        # move_record.js parses destination as "Database/Group/Subgroup":
+        # the first segment is the DB name, not a leading slash.
+        "destination": "fixtures-dt-mcp/Archive",
     },
 }
 
