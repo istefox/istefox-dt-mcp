@@ -184,8 +184,9 @@ def load_manifest(path: Path | None = None) -> dict[str, Any]:
     purpose-built manifest fixture.
     """
     if path is None:
-        # Repo root is the parent of the apps/ directory.
-        repo_root = Path(__file__).resolve().parents[5]
+        # __file__ lives at apps/server/src/istefox_dt_mcp_server/_record_cassette.py
+        # so parents[4] is the repo root that contains apps/ and tests/.
+        repo_root = Path(__file__).resolve().parents[4]
         path = repo_root / "tests" / "fixtures" / "dt-database-manifest.json"
     with path.open(encoding="utf-8") as fh:
         data: dict[str, Any] = json.load(fh)
