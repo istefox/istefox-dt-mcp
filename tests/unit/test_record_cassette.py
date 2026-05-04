@@ -310,3 +310,52 @@ def test_sanitize_distinguishes_database_inbox_from_group_inbox() -> None:
     # the group placeholder FIXTURE-GRP-INBOX.
     assert parsed[1]["uuid"] == "FIXTURE-DB-SYSINBOX"
     assert parsed[1]["uuid"] != "FIXTURE-GRP-INBOX"
+
+
+def test_sanitize_matches_path_with_trailing_slash() -> None:
+    """DT4 returns DT-internal locations with a trailing slash (/Inbox/);
+    the manifest stores them without (/Inbox). The sanitizer must accept
+    both forms or every record gets <UNKNOWN_PATH_n>."""
+    captured = {
+        "script": "search.js",
+        "argv": ["x"],
+        "stdout": json.dumps(
+            [
+                {
+                    "uuid": "DT-RUNTIME-X",
+                    "name": "Sample PDF Invoice 2025",
+                    "location": "/Inbox/",
+                }
+            ]
+        ),
+    }
+    out = sanitize_cassette(captured, _MANIFEST)
+    parsed = json.loads(out["stdout"])
+    assert parsed[0]["location"] == "/Inbox/"
+    assert "<UNKNOWN_PATH" not in out["stdout"]
+
+
+def test_sanitize_rewrites_uuid_in_reference_url() -> None:
+    """reference_url contains x-devonthink-item://<uuid>. That UUID is a
+    real DT machine UUID and must be rewritten to the manifest placeholder
+    so cassettes don't leak it."""
+    captured = {
+        "script": "search.js",
+        "argv": ["x"],
+        "stdout": json.dumps(
+            [
+                {
+                    "uuid": "DT-RUNTIME-X",
+                    "name": "Sample PDF Invoice 2025",
+                    "location": "/Inbox",
+                    "reference_url": "x-devonthink-item://2BB80D07-0239-4322-B798-726E479EDBF5",
+                }
+            ]
+        ),
+    }
+    out = sanitize_cassette(captured, _MANIFEST)
+    parsed = json.loads(out["stdout"])
+    # Both uuid and reference_url use the SAME placeholder.
+    assert parsed[0]["uuid"] == "FIXTURE-REC-0001"
+    assert parsed[0]["reference_url"] == "x-devonthink-item://FIXTURE-REC-0001"
+    assert "2BB80D07" not in out["stdout"]

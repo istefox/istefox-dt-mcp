@@ -70,18 +70,42 @@ def _is_database_node(node: dict[str, Any]) -> bool:
 
 
 def _build_path_set(manifest: dict[str, Any]) -> set[str]:
-    """Collect all known paths from the manifest groups + records."""
+    """Collect all known paths from the manifest groups + records.
+
+    DT4 commonly returns DT-internal locations with a trailing slash
+    (e.g. ``/Inbox/`` rather than ``/Inbox``). Add both forms so the
+    sanitizer matches either reliably.
+    """
     paths: set[str] = set()
     for group in manifest.get("groups", []):
-        paths.add(group["path"])
+        path = group["path"]
+        paths.add(path)
+        paths.add(path.rstrip("/") + "/")
     for rec in manifest.get("records", []):
-        paths.add(rec["location"])
+        loc = rec["location"]
+        paths.add(loc)
+        paths.add(loc.rstrip("/") + "/")
     return paths
 
 
 def _rewrite_filesystem_paths(text: str) -> str:
     """Replace any /Users/<name>/ with /Users/fixture/."""
     return re.sub(r"/Users/[^/]+/", f"/Users/{SAFE_USERNAME_PLACEHOLDER}/", text)
+
+
+_UUID_RE = re.compile(
+    r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+)
+
+
+def _rewrite_uuid_in_url(value: str, replacement_uuid: str) -> str:
+    """Replace the first UUID in ``value`` with ``replacement_uuid``.
+
+    Used for ``reference_url`` (``x-devonthink-item://<uuid>``) where
+    the UUID is embedded in a URL string. Without this, real DT UUIDs
+    leak into committed cassettes.
+    """
+    return _UUID_RE.sub(replacement_uuid, value, count=1)
 
 
 def sanitize_cassette(
@@ -171,6 +195,15 @@ def sanitize_cassette(
                 ):
                     unknown_name_counter += 1
                     new[key] = f"<UNKNOWN_NAME_{unknown_name_counter}>"
+                elif (
+                    key == "reference_url"
+                    and isinstance(val, str)
+                    and name_field in scoped_map
+                ):
+                    # x-devonthink-item://<real-uuid> → rewrite the UUID
+                    # to the same placeholder used for the parent's uuid
+                    # field. Without this, real DT UUIDs leak via URL.
+                    new[key] = _rewrite_uuid_in_url(val, scoped_map[name_field])
                 elif (
                     key in ("location", "path")
                     and isinstance(val, str)
