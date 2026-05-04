@@ -220,6 +220,58 @@ DEFAULT_INPUTS: dict[str, dict[str, Any]] = {
 SUPPORTED_TOOLS: tuple[str, ...] = tuple(DEFAULT_INPUTS.keys())
 
 
+async def _resolve_placeholder_uuids(
+    args: dict[str, Any],
+    manifest: dict[str, Any],
+    adapter: Any,
+) -> dict[str, Any]:
+    """Translate manifest placeholder UUIDs in ``args`` to live DT UUIDs.
+
+    DEFAULT_INPUTS (and any --input passed by Stefano) reference records
+    by their stable manifest placeholder UUIDs (e.g.
+    ``FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA``). Live DT4 has its own UUIDs
+    generated at record-creation time, so we look up the corresponding
+    record by NAME in the live DB and substitute the real UUID before
+    invoking the tool. The post-capture sanitizer handles the reverse
+    mapping in stdout.
+
+    Only the ``uuid`` key is translated — other keys (query, destination,
+    tag, ...) pass through. If ``args["uuid"]`` is not a known
+    placeholder, it is left untouched (so callers can also pass real
+    UUIDs directly).
+
+    Calls the adapter via ``_jxa_inline``, which bypasses
+    ``_run_script`` and therefore is NOT intercepted by ``_RecorderShim``
+    (the shim must be installed AFTER this resolver returns).
+    """
+    if "uuid" not in args:
+        return args
+    placeholder = args["uuid"]
+
+    record_name: str | None = None
+    for rec in manifest.get("records", []):
+        if rec.get("uuid_placeholder") == placeholder:
+            record_name = rec.get("name")
+            break
+    if record_name is None:
+        return args
+
+    db_name = manifest["database"]["name"]
+    code = (
+        'const dt = Application("DEVONthink");'
+        f"const db = dt.databases().filter(d => d.name() === {json.dumps(db_name)})[0];"
+        f'if (!db) throw new Error("DB not found: " + {json.dumps(db_name)});'
+        f"const recs = db.contents().filter(r => r.name() === {json.dumps(record_name)});"
+        f'if (recs.length === 0) throw new Error("Record not found by name: " + {json.dumps(record_name)});'
+        "JSON.stringify({uuid: recs[0].uuid()});"
+    )
+    raw = await adapter._jxa_inline(code)
+    parsed = raw if isinstance(raw, dict) else json.loads(raw)
+    new_args = dict(args)
+    new_args["uuid"] = parsed["uuid"]
+    return new_args
+
+
 class _RecorderShim:
     """Wraps an adapter's _run_script to intercept the FIRST JXA call.
 
@@ -286,7 +338,8 @@ async def record_cassette(
             f"Unsupported tool {tool!r}. Supported: {', '.join(SUPPORTED_TOOLS)}"
         )
 
-    args = input_args if input_args is not None else DEFAULT_INPUTS[tool]
+    args = dict(input_args if input_args is not None else DEFAULT_INPUTS[tool])
+    args = await _resolve_placeholder_uuids(args, manifest, deps.adapter)
     shim = _RecorderShim(deps.adapter)
     shim.install()
 

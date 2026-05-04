@@ -233,3 +233,40 @@ async def test_record_cassette_uses_default_inputs(tmp_path) -> None:
     )
 
     assert capture_args["uuid"] == DEFAULT_INPUTS["get_record"]["uuid"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_placeholder_uuids_translates_known_placeholder() -> None:
+    """When args.uuid matches a manifest placeholder, it is replaced with
+    the live DT UUID returned by adapter._jxa_inline."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import _resolve_placeholder_uuids
+
+    adapter = MagicMock()
+    adapter._jxa_inline = AsyncMock(return_value={"uuid": "REAL-DT-UUID-12345"})
+
+    args_in = {"uuid": "FIXTURE-REC-0001", "tag": "review"}
+    args_out = await _resolve_placeholder_uuids(args_in, _MANIFEST, adapter)
+
+    assert args_out["uuid"] == "REAL-DT-UUID-12345"
+    assert args_out["tag"] == "review"
+    adapter._jxa_inline.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_placeholder_uuids_passes_through_unknown() -> None:
+    """If args.uuid is NOT a known placeholder, args is returned unchanged
+    and the adapter is not called."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import _resolve_placeholder_uuids
+
+    adapter = MagicMock()
+    adapter._jxa_inline = AsyncMock()
+
+    args_in = {"uuid": "SOME-UNKNOWN-UUID-NOT-IN-MANIFEST"}
+    args_out = await _resolve_placeholder_uuids(args_in, _MANIFEST, adapter)
+
+    assert args_out == args_in
+    adapter._jxa_inline.assert_not_awaited()
