@@ -6,177 +6,137 @@
 
 ## Snapshot sessione corrente
 
-- **Data fine**: 2026-05-02
-- **Output principale**: **release pubblica 0.1.0** + presenza su MCP Registry + repo public + contributors history pulita
+- **Data fine**: 2026-05-04 sera (~22:00 locali)
+- **Branch**: `main` @ `4dbc983` (in sync con origin/main)
+- **Output principale**: cassette VCR real-data — infrastruttura completa + 6 cassette pulite catturate ma NON ancora committate (3 punti di attenzione da risolvere prima)
 
 ---
 
-## Stato corrente del progetto (2026-05-02)
+## Stato corrente del progetto
 
-**Versione live**: `v0.1.0` (rilasciata 2026-05-02 07:06 UTC)
+### Versione live
+- **GitHub Releases**: `v0.1.0` (rilasciata 2026-05-02, ancora attuale)
+- **MCP Registry**: `io.github.istefox/dt-mcp` v0.1.0
+- **Repo**: pubblico, MIT, solo `istefox` come contributor
 
-### Distribuzione
+### 0.2.0 in corso — landed in main
 
-- **GitHub Releases**: https://github.com/istefox/istefox-dt-mcp/releases/tag/v0.1.0
-- **Bundle .mcpb**: `istefox-dt-mcp-0.1.0.mcpb` (293 KB, sha256 `ec0947840987071b6cf6ec445dcd8aeac62b5aba45530863fb1cbd9131a92bbb`)
-- **MCP Registry**: `io.github.istefox/dt-mcp` v0.1.0 (LIVE su `registry.modelcontextprotocol.io`)
-- **Repo**: https://github.com/istefox/istefox-dt-mcp — **PUBLIC**, MIT, 0 star/0 fork (appena pubblicato)
+PR mergiate da inizio 0.2.0 (ordine cronologico):
 
-### Contributors
-
-- **Solo `istefox`** (49 commit). Storia git ripulita 2026-05-02 con `git filter-repo` per rimuovere `Co-authored-by: Claude` da tutti i commit (case-insensitive — gotcha GitHub squash-merge usa lowercase).
+| PR | Topic |
+|---|---|
+| #43 | Drift detection 3-stati (no_drift/already_reverted/hostile_drift) per file_document undo |
+| #45 | `summarize_topic` — server-side clustering retrieval (4 dimensioni) |
+| #49 | **Cassette VCR infrastructure** (record-cassette CLI + sanitization + manifest + setup script + recording guide + invariant tests) |
+| #50 | fix setup_test_database: ~/Databases/ + lookup-by-name dopo createDatabase |
+| #51 | fix setup_test_database: createRecordWith + kind→type mapping + location group walk |
+| #52 | fix setup_test_database: rtf → "formatted note" (DT4 silently no-op su "rtf") |
+| #53 | fix load_manifest: parents[5] → parents[4] (off-by-one) |
+| #54 | fix record_cassette: parents[5] → parents[4] in CLI + `_resolve_placeholder_uuids` (placeholder→real UUID via lookup-by-name) |
+| #55 | fix DEFAULT_INPUTS["move_record"]: destination "fixtures-dt-mcp/Archive" (formato Database/Group) |
+| #56 | fix record_cassette: `cache_enabled=False` durante capture (TTL SQLite cache short-circuita JXA) |
+| #57 | fix sanitizer: split mappa DB vs record (system Inbox vs gruppo /Inbox) + manifest `system_databases` |
+| #58 | fix sanitizer: trailing-slash path + UUID in `reference_url` |
+| #59 | fix sanitizer: `real_uuid_map` per riscrivere argv + stdout text-level |
 
 ### Test status
-
-- 163 unit + contract test pass (157 unit + 6 contract)
-- 7 integration test (skip default, `-m integration` per runarli, richiedono DT running + AppleEvents)
-- macOS-14 GHA integration: 7 run total, mean 31.7s/run, costo budget = 0€ (public repo)
-
-### CI/CD attivi
-
-- `ci.yml` — ubuntu, lint+mypy+unit+contract on PR (success)
-- `integration.yml` — macos-14, on-PR-of-relevant-paths + nightly cron (success, 7/7 skip clean senza DT)
-- `release.yml` — workflow_dispatch, build .mcpb + tag + Release
-- `publish-registry.yml` — push tag `v*` + workflow_dispatch, publish to MCP Registry via OIDC
+- 208 unit + contract test pass
+- 7 integration test (skip default)
+- macos-import-and-bundle CI: pass
 
 ---
 
-## Cosa è stato fatto in questa sessione (2026-05-01 → 2026-05-02)
+## Cose pendenti — cassette VCR (working tree, non committate)
 
-Sessione lunga ~10 ore divisa in 3 fasi.
+Le 6 cassette catturate live dal DB `fixtures-dt-mcp` sono nel working tree (`tests/contract/cassettes/*.json`) ma NON sono state committate. **CLEAN**: zero leak (nessun username, nessun DB privato, nessun UUID reale DT).
 
-### Fase 1 — Pre-0.1.0 polish (0.0.20 → 0.0.28)
+### 3 punti di attenzione da risolvere prima di committarle
 
-15 PR di polish emersi da E2E testing reale (Stefano testava in Terminal.app vero su DT4 vero):
+1. **`Sample PDF Invoice 2025` ora vive in `/Archive/` invece di `/Inbox/`** — durante il recording, `move_record` (dry_run=False di default) ha effettivamente spostato il record. Tutte le cassette catturate dopo `move_record` riflettono lo stato post-move. Il DB ora drift-a dal manifest. Da decidere:
+   - Spostare manualmente il record da `/Archive` a `/Inbox` in DT4 e ricatturare per location stabile, OPPURE
+   - Aggiornare il manifest per dichiarare `/Archive` come location attesa per quel record (ma diventa più strano semanticamente)
 
-| PR | Cosa |
-|---|---|
-| #13 | Relicense MIT + housekeeping pre-0.1.0 |
-| #14 | ADR-008 Deferred to 0.2.0 (RAG benchmark deferral) |
-| #15 | `destination_hint` server-side validation |
-| #16 | `list_databases` fast mode (`ISTEFOX_FAST_LIST_DATABASES`) |
-| #17 | Bundle uv detection esteso (mise/asdf + `ISTEFOX_UV_BIN`) |
-| #18 | Bump 0.0.21 + CHANGELOG |
-| #19 | `user_config` MCPB → 4 env var configurabili da Claude Desktop UI |
-| #20 | CLI `audit list --recent N` (recovery path per audit_id) |
-| #21 | Undo `drift_details` per debug visibile |
-| #22 | Tier 2-4 testing (cassettes + integration + smoke E2E) |
-| #23 | README user-facing (rewrite italiano) |
-| #24 | CI Step 3 — macOS integration workflow + real release pipeline |
-| #25 | CI fix: black formatting + integration grep regex |
-| #26 | Doctor 2-stage probe (-1743 detection) |
-| #27 | `search_bm25` reference_url fallback + bench skip when disabled |
-| #28 | `get_record` reference_url fallback + smoke step 3 audit query |
-| #29 | Smoke step 5 hang fix (FIFO+fd3 → echo|server|head pipe) |
+2. **`find_related` ritorna lista vuota `[]`** — il record fixture è un PDF placeholder senza contenuto reale, quindi DT4 non trova similar. Da decidere:
+   - Accettare la lista vuota (la cassette testa solo lo "shape" della risposta vuota), OPPURE
+   - Popolare i record fixture con contenuto reale così `find_related` può tornare match significativi
 
-### Fase 2 — Release 0.1.0 (Step 8 del piano)
+3. **`<UNKNOWN_PATH_1>` rimanente nel campo `path`** — è il filesystem path interno del `.dtBase2` bundle (`/Files.noindex/<machine-uuid>.pdf`). Documentato come known limitation in PR #58. Safe (nessun leak), non deterministico. Da fare:
+   - Allentare l'invariant test `test_cassettes_have_no_unknown_placeholders` per consentire `<UNKNOWN_PATH_n>` SOLO sul campo `path` di Record, NON su location
 
-- PR #30: bump 0.0.28 → 0.1.0 + CHANGELOG entry "First public release"
-- Trigger `gh workflow run release.yml -f version=0.1.0` → tag `v0.1.0` creato + GitHub Release pubblicata con `.mcpb` attached
-- PR #31: `server.json` + `publish-registry.yml` workflow per MCP Registry
-- PR #32: README tradotto in inglese + post-0.1.0 corrections
-- PR #33: `server.json` description trim (≤100 chars per validation registry)
-- Trigger `publish-registry.yml` → entry live su MCP Registry come `io.github.istefox/dt-mcp`
+### Step di chiusura del feature cassette VCR
 
-### Fase 3 — Cleanup post-release (2026-05-02)
+Quando i 3 punti sopra sono decisi:
 
-- **Git history rewrite** con `git filter-repo` (case-insensitive!) per rimuovere `Co-authored-by: Claude` da TUTTI gli 82 commit. 2 round di force-push (primo round mancava i lowercase di GitHub squash-merge).
-- Verify: contributors API ritorna solo `istefox` (49 commit).
-- PR #34: `docs/assets/architecture.svg` + embed in README
-- PR #35: SVG fix — sfondo bianco (era trasparente) + RAG label position no-overlap con Audit Log
-- Cleanup: 32 branch locali stale eliminati, 18 bundle pre-0.1.0 rimossi da `dist/`, `.coverage` + `.DS_Store` puliti, backup branch eliminato
-- Spike #9 "Costi CI macOS GHA" risolto: repo public → free unlimited, mean 31.7s/run
+1. Riportare il record in `/Inbox` o aggiornare il manifest
+2. Ricatturare con `uv run istefox-dt-mcp record-cassette --all`
+3. Aggiornare l'invariant test (point 3 sopra)
+4. **Riscrivere i contract test assertions** in `tests/contract/test_jxa_replay.py` per matchare i dati reali di `fixtures-dt-mcp` (oggi falliscono perché cablate sui vecchi cassette sintetici, es. `assert len(databases) == 2`)
+5. Aggiornare CHANGELOG sezione Unreleased
+6. Commit cassette + invariant + contract test rewrite in un PR finale
 
 ---
 
-## Cose pendenti al riavvio
-
-### Annunci pubblicati (2026-05-03)
-
-1. **r/devonthink** — LIVE come `u/stefferri`, draft asciutto v2 (~200 parole, single-level bullets, **bold** invece di `##`). Monitorare commenti/feedback nelle 24-48h.
-2. **discourse.devontechnologies.com** — LIVE in sub-categoria `DEVONthink → Artificial Intelligence` (NB: non `Automation`, scelta consapevole — l'audience AI è auto-selezionata sul tema MCP/LLM). Variante tecnica ~450 parole con 4 punti specifici di feedback richiesto (JXA edge cases, smart-rule patterns, mixed-language DBs, DT3 backcompat).
-3. **`punkpeye/awesome-mcp-servers#5784`** — PR upstream OPEN + bot-validated (`check-submission: pass`, `mergeStateStatus: CLEAN`), in attesa di review del maintainer. Posizione alfabetica corretta in `🧠 Knowledge & Memory` tra `IgorGanapolsky` e `JamesANZ`. **Glama badge live + Glama release pubblicata** (build success in 14s su cache hit, instance logs confermano introspection completa: tools/list, prompts/list, resources/list).
-4. **Glama directory** — LIVE su `glama.ai/mcp/servers/istefox/istefox-dt-mcp`, server claimed (badge "Official"), Dockerfile config validato (debian:trixie-slim + Python 3.12 + uv + mcp-proxy stdio). Score iniziale `A-B`.
-5. **Repo Dockerfile** (`a2b8af2`) — non strettamente necessario per Glama (loro generano il proprio), ma utile collateralmente per CI futuri / sviluppo isolato. Lasciato in repo.
-
-### Annunci ancora da fare (opzionali)
-
-- **Bluesky / X** — versione 280 char con link repo + 1 GIF. Hashtag `#mcp #devonthink #claudeai`. Boost low-medium.
-- **LinkedIn** — taglio "lessons learned tecnici" (clean-room, packaging `.mcpb`, JXA gotchas). Brand professionale, opzionale.
-
-### Cose da monitorare
-
-- Risposte Reddit + forum DT nelle 12-48h → triage in issue/feature request se pertinenti
-- PR #5784 `awesome-mcp-servers` → potrebbe richiedere giorni-settimana, niente da fare oltre rispondere a eventuali commenti di review
-
-### 0.2.0 roadmap (vedi CHANGELOG sezione Unreleased)
-
-- ✅ **Drift detection 3-stati** (`no_drift` / `already_reverted` / `hostile_drift`) — landed in PR #43 (`247141e`, 2026-05-03). Scope: `file_document` undo. Bulk_apply lasciato a 0.3.0+.
-- ✅ **`summarize_topic`** — server-side clustering retrieval, landed in PR #45 (`8959ec2`, 2026-05-04). 4 dimensioni (date, tags, kind, location), default cluster_by `["date", "tags"]`.
-- ⏸️ **`create_smart_rule`** — **DEFERRED a 0.3.0+** per limite SDK DT4 (issue #47). DT4 4.2.2 NON espone create/delete via scripting; solo `perform smart rule` esiste. Spec, ADR-0009, plan, discovery committati su branch `spec/create-smart-rule` e `feat/create-smart-rule` come artifact riusabili quando l'SDK gap si chiude.
-- RAG benchmark cross-corpus (≥3 corpus, ≥2 early adopter) + flip default modello (ADR-008) — bloccato su early adopter
-- HTTP transport + OAuth multi-device (ADR-006) — scope grosso, ADR da finalizzare
-- Cassette VCR catturate da DT vivo — non iniziato, mezza giornata stimata
-- Per-op drift detection per `bulk_apply` undo — richiede schema upgrade audit log
-
-### Branch in stallo (riapribili in futuro)
-
-- `feat/create-smart-rule` (su origin) — contiene solo il commit `ee9317f` con la discovery JXA. Niente codice. Riusabile come reference se DT4 SDK aggiunge i verbi mancanti.
-- `spec/create-smart-rule` (su origin) — contiene spec, ADR-0009 (Accepted), plan e relativa documentazione. Riusabile quando l'unblock arriva.
-
-Stefano può cancellarli in qualsiasi momento via web UI; il sistema mi ha negato la cancellazione remota (giustamente — destructive su shared state).
-
----
-
-## Stato repo locale al riavvio
+## Stato repo locale
 
 ```
 ~/Developer/Devonthink_MCP/
-├── main branch (in sync con origin/main)
-├── 0 stale branches (cleanup fatto)
-├── dist/istefox-dt-mcp-0.1.0.mcpb (1 file, 293 KB)
-└── working tree clean
+├── main branch @ 4dbc983 (in sync con origin/main)
+├── working tree:
+│   └── tests/contract/cassettes/*.json (6 file modificati, NON staged)
+└── 0 stale branches (cleanup fatto durante la sessione)
 ```
 
-`git status` → clean. `git log --oneline -3`:
+`git status` → 6 cassette modified non staged.
+`git log --oneline -5`:
 ```
-PR #35 fix(architecture.svg): white background + RAG label no longer overlaps Audit Log
-PR #34 docs: add architecture.svg + embed in README
-PR #33 fix(registry): trim server.json description to ≤100 chars
+4dbc983 fix(sanitizer): rewrite real DT UUIDs in argv via real_uuid_map (#59)
+db04074 fix(sanitizer): match trailing-slash paths + rewrite UUIDs in reference_url (#58)
+f4b9b08 fix(sanitizer): split DB and record name maps to handle DT4 system Inbox (#57)
+49fdb76 fix(record_cassette): disable cache during capture (#56)
+907bf5a fix(record_cassette): correct DEFAULT_INPUTS move_record destination format (#55)
 ```
 
 ---
 
-## Riferimenti per il prossimo pickup
+## Stato DT4 (Stefano's Mac)
 
-- **CHANGELOG.md** — full history versione per versione, sezione `[Unreleased]` lista i pending per 0.2.0
-- **README.md** — aggiornato in inglese, badge v0.1.0, troubleshooting top 5
-- **server.json** + **manifest.json** — both at version 0.1.0, license MIT
-- **scripts/smoke_e2e.sh** — Tier 4 smoke pre-tag, 5 step verdi su 5 (validato 2026-05-02 in Terminal.app)
-- **tests/integration/README.md** — istruzioni run integration su DT vivo
-- **docs/adr/0008-embedding-model-selection.md** — status Deferred to 0.2.0, criteri sblocco
-- **memoria persistente Claude** in `~/.claude/projects/-Users-stefanoferri-Developer-Devonthink-MCP/memory/` — 8 file con stato + pattern + reference
+- Database `fixtures-dt-mcp` aperto in `~/Databases/fixtures-dt-mcp.dtBase2`
+- 10 record creati nei rispettivi gruppi (post move_record: il primo PDF è in `/Archive` invece che `/Inbox`)
+- Database `privato` chiuso (chiuso manualmente prima delle catture pulite)
+- Database sistema `Inbox` aperto (non chiudibile, gestito dal sanitizer come `system_databases`)
+
+---
+
+## 0.2.0 roadmap rimanente
+
+- ⏳ **Cassette VCR live** — infrastruttura ✅, capture ✅, mancano i 3 punti sopra + test rewrite
+- ⏸️ **`create_smart_rule`** — DEFERRED (issue #47 — DT4 SDK gap)
+- ⏸️ **RAG benchmark cross-corpus** — bloccato su early adopter
+- ⏸️ **HTTP transport + OAuth multi-device** — ADR-006 da finalizzare
+- ⏸️ **Per-op drift detection per `bulk_apply` undo** — schema upgrade audit log
 
 ---
 
 ## Per riprendere
 
-Da terminale (Terminal.app raccomandato per AppleEvents):
-
 ```bash
 cd ~/Developer/Devonthink_MCP
-git status                    # → clean
-git log --oneline -5          # → ultimo PR #35
-gh release view v0.1.0        # → release LIVE con .mcpb asset
+git status                 # → 6 cassette modified non staged
+git log --oneline -5       # → ultimo PR #59
+ls tests/contract/cassettes/  # → 6 file
 ```
 
-Verifica MCP Registry:
+Verifica integrità cassette:
 ```bash
-curl -sL "https://registry.modelcontextprotocol.io/v0/servers?search=istefox" | python3 -m json.tool | head -20
-```
-
-Verifica integration tests (DT running + TCC OK):
-```bash
-uv run pytest tests/integration -m integration --benchmark-enable -v
-# Atteso: 7 PASS
+python3 -c "
+import json, re
+real_uuid_re = re.compile(r'[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
+fixture_re = re.compile(r'^FIXTURE-')
+for n in ['list_databases', 'search_bm25', 'find_related', 'get_record', 'apply_tag', 'move_record']:
+    full = json.dumps(json.load(open(f'tests/contract/cassettes/{n}.json')))
+    leaks = ['stefanoferri'] if 'stefanoferri' in full else []
+    leaks += ['privato'] if 'privato' in full.lower() else []
+    leaks += ['real-DT-UUID'] if [u for u in real_uuid_re.findall(full) if not fixture_re.match(u)] else []
+    print(f'{n}: {\"CLEAN\" if not leaks else \"LEAK: \" + str(leaks)}')
+"
 ```
