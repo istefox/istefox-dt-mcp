@@ -161,6 +161,8 @@ async def test_record_cassette_writes_correct_format(tmp_path) -> None:
                 "uuid": "DT-RUNTIME-XYZ",
                 "name": "fixtures-dt-mcp",
                 "path": "/Users/john/Library/db.dtBase2",
+                "is_open": True,
+                "record_count": 10,
             }
         ]
     )
@@ -270,3 +272,41 @@ async def test_resolve_placeholder_uuids_passes_through_unknown() -> None:
 
     assert args_out == args_in
     adapter._jxa_inline.assert_not_awaited()
+
+
+def test_sanitize_distinguishes_database_inbox_from_group_inbox() -> None:
+    """The system DB named 'Inbox' must NOT be matched against the manifest
+    group named '/Inbox' (different entities, different placeholders)."""
+    manifest = dict(_MANIFEST)
+    manifest["system_databases"] = [
+        {"name": "Inbox", "uuid_placeholder": "FIXTURE-DB-SYSINBOX"}
+    ]
+    captured = {
+        "script": "list_databases.js",
+        "argv": [],
+        "stdout": json.dumps(
+            [
+                {
+                    "uuid": "FIRST-DB-UUID",
+                    "name": "fixtures-dt-mcp",
+                    "path": "/Users/me/db.dtBase2",
+                    "is_open": True,
+                    "record_count": 10,
+                },
+                {
+                    "uuid": "INBOX-DB-UUID",
+                    "name": "Inbox",
+                    "path": "/Users/me/Inbox.dtBase2",
+                    "is_open": True,
+                    "record_count": 5,
+                },
+            ]
+        ),
+    }
+    out = sanitize_cassette(captured, manifest, abort_threshold=0.99)
+    parsed = json.loads(out["stdout"])
+    assert parsed[0]["uuid"] == "FIXTURE-DB-0001"
+    # Critical: Inbox DB resolves to system_databases placeholder, NOT to
+    # the group placeholder FIXTURE-GRP-INBOX.
+    assert parsed[1]["uuid"] == "FIXTURE-DB-SYSINBOX"
+    assert parsed[1]["uuid"] != "FIXTURE-GRP-INBOX"

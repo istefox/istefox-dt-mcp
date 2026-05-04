@@ -35,16 +35,38 @@ class SanitizationError(RuntimeError):
     """
 
 
-def _build_name_to_uuid_map(manifest: dict[str, Any]) -> dict[str, str]:
-    """Map record name → manifest uuid_placeholder for fast lookup."""
-    out = {rec["name"]: rec["uuid_placeholder"] for rec in manifest.get("records", [])}
+def _build_db_name_to_uuid_map(manifest: dict[str, Any]) -> dict[str, str]:
+    """Map database/system-database name → uuid placeholder.
+
+    Kept separate from the record/group map: the system Inbox database
+    is named ``Inbox`` and would otherwise collide with the
+    fixtures-dt-mcp ``/Inbox`` group entry, causing list_databases
+    captures to mis-identify the system DB as the user group.
+    """
+    out: dict[str, str] = {}
     out[manifest["database"]["name"]] = manifest["database"]["uuid_placeholder"]
+    for sys_db in manifest.get("system_databases", []):
+        out[sys_db["name"]] = sys_db["uuid_placeholder"]
+    return out
+
+
+def _build_record_name_to_uuid_map(manifest: dict[str, Any]) -> dict[str, str]:
+    """Map record/group name → uuid placeholder (NOT databases)."""
+    out = {rec["name"]: rec["uuid_placeholder"] for rec in manifest.get("records", [])}
     for group in manifest.get("groups", []):
         # Groups keyed by their last path segment (e.g. "Inbox" from "/Inbox")
         # because DT may surface the leaf name rather than the full path.
         leaf = group["path"].rstrip("/").split("/")[-1] or group["path"]
         out[leaf] = group["uuid_placeholder"]
     return out
+
+
+def _is_database_node(node: dict[str, Any]) -> bool:
+    """Heuristic: a Database JXA payload has ``is_open`` and ``record_count``.
+
+    Records and groups have ``kind``/``location`` instead.
+    """
+    return "is_open" in node and "record_count" in node
 
 
 def _build_path_set(manifest: dict[str, Any]) -> set[str]:
@@ -93,7 +115,11 @@ def sanitize_cassette(
         SanitizationError: if abort_threshold is exceeded or stdout is
             not parseable JSON.
     """
-    name_to_uuid = _build_name_to_uuid_map(manifest)
+    db_name_to_uuid = _build_db_name_to_uuid_map(manifest)
+    record_name_to_uuid = _build_record_name_to_uuid_map(manifest)
+    # Union of both maps for the unknown-name detection step (a name is
+    # only ``unknown`` if it is in neither map).
+    all_known_names = set(db_name_to_uuid) | set(record_name_to_uuid)
     known_paths = _build_path_set(manifest)
 
     raw_stdout = cassette.get("stdout", "")
@@ -122,19 +148,31 @@ def sanitize_cassette(
         if isinstance(node, dict):
             new: dict[str, Any] = {}
             name_field = node.get("name")
+            # Pick the lookup map by node type. Database nodes (top-level
+            # in list_databases output) only resolve against database
+            # placeholders; record/group nodes only resolve against
+            # record placeholders. This avoids a system DB named "Inbox"
+            # being matched against a manifest group "/Inbox".
+            scoped_map = (
+                db_name_to_uuid if _is_database_node(node) else record_name_to_uuid
+            )
             for key, val in node.items():
                 if (
                     key == "uuid"
                     and isinstance(val, str)
-                    and name_field in name_to_uuid
+                    and name_field in scoped_map
                 ):
-                    new[key] = name_to_uuid[name_field]
+                    new[key] = scoped_map[name_field]
                     total_count += 1
                 elif key == "uuid" and isinstance(val, str):
                     new[key] = val
                     total_count += 1
                     unknown_count += 1
-                elif key == "name" and isinstance(val, str) and val not in name_to_uuid:
+                elif (
+                    key == "name"
+                    and isinstance(val, str)
+                    and val not in all_known_names
+                ):
                     unknown_name_counter += 1
                     new[key] = f"<UNKNOWN_NAME_{unknown_name_counter}>"
                 elif (
