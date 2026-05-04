@@ -255,3 +255,38 @@ async def test_replay_move_record() -> None:
     assert result.outcome is WriteOutcome.APPLIED
     assert result.location_before == location_before
     assert result.location_after == location_after
+
+
+# ----------------------------------------------------------------------
+# Sanity invariant: cassettes pass sanitization rules
+# ----------------------------------------------------------------------
+
+
+def test_cassettes_have_no_personal_filesystem_paths() -> None:
+    """No cassette in tests/contract/cassettes/ leaks /Users/<realname>/."""
+    import re
+
+    pattern = re.compile(r"/Users/([^/\"']+)/")
+    for cassette_file in CASSETTES_DIR.glob("*.json"):
+        text = cassette_file.read_text(encoding="utf-8")
+        matches = pattern.findall(text)
+        # The only acceptable username in committed cassettes is "fixture".
+        leaks = [m for m in matches if m != "fixture"]
+        assert not leaks, (
+            f"Cassette {cassette_file.name} contains personal paths: "
+            f"/Users/{leaks[0]}/... — re-record with sanitization enabled."
+        )
+
+
+def test_cassettes_have_no_unknown_placeholders() -> None:
+    """No cassette contains <UNKNOWN_NAME_n> or <UNKNOWN_PATH_n> markers."""
+    for cassette_file in CASSETTES_DIR.glob("*.json"):
+        text = cassette_file.read_text(encoding="utf-8")
+        assert "<UNKNOWN_NAME_" not in text, (
+            f"Cassette {cassette_file.name} has unknown record names — "
+            f"likely recorded against the wrong DB."
+        )
+        assert "<UNKNOWN_PATH_" not in text, (
+            f"Cassette {cassette_file.name} has unknown paths — "
+            f"likely recorded against the wrong DB."
+        )

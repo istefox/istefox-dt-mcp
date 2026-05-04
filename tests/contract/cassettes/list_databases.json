@@ -1,5 +1,5 @@
 {
   "script": "list_databases.js",
   "argv": [],
-  "stdout": "[{\"uuid\":\"DB-INBOX-0001-AAAA-BBBBCCCCDDDD\",\"name\":\"Inbox\",\"path\":\"/Users/stefanoferri/Library/Application Support/DEVONthink/Inbox.dtBase2\",\"is_open\":true,\"record_count\":42},{\"uuid\":\"DB-PRIVATO-0002-AAAA-BBBBCCCCDDDD\",\"name\":\"privato\",\"path\":\"/Users/stefanoferri/Documents/DEVONthink/privato.dtBase2\",\"is_open\":true,\"record_count\":3187}]"
+  "stdout": "[{\"uuid\":\"DB-INBOX-0001-AAAA-BBBBCCCCDDDD\",\"name\":\"Inbox\",\"path\":\"/Users/fixture/Library/Application Support/DEVONthink/Inbox.dtBase2\",\"is_open\":true,\"record_count\":42},{\"uuid\":\"DB-PRIVATO-0002-AAAA-BBBBCCCCDDDD\",\"name\":\"privato\",\"path\":\"/Users/fixture/Documents/DEVONthink/privato.dtBase2\",\"is_open\":true,\"record_count\":3187}]"
 }

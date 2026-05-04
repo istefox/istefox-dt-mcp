@@ -1,5 +1,5 @@
 {
   "script": "get_record.js",
   "argv": ["REC-PDF-0001-AAAA-BBBBCCCCDDDD"],
-  "stdout": "{\"uuid\":\"REC-PDF-0001-AAAA-BBBBCCCCDDDD\",\"name\":\"Fattura 2026-001 ACME Srl\",\"kind\":\"PDF\",\"location\":\"/privato/fatture/2026/\",\"path\":\"/Users/stefanoferri/Documents/DEVONthink/privato.dtBase2/Files.noindex/pdf/f/fattura-2026-001.pdf\",\"reference_url\":\"x-devonthink-item://REC-PDF-0001-AAAA-BBBBCCCCDDDD\",\"creation_date\":\"2026-01-15T09:32:11.000Z\",\"modification_date\":\"2026-01-15T09:33:02.000Z\",\"tags\":[\"fattura\",\"2026\",\"acme\"],\"size_bytes\":284512,\"word_count\":421}"
+  "stdout": "{\"uuid\":\"REC-PDF-0001-AAAA-BBBBCCCCDDDD\",\"name\":\"Fattura 2026-001 ACME Srl\",\"kind\":\"PDF\",\"location\":\"/privato/fatture/2026/\",\"path\":\"/Users/fixture/Documents/DEVONthink/privato.dtBase2/Files.noindex/pdf/f/fattura-2026-001.pdf\",\"reference_url\":\"x-devonthink-item://REC-PDF-0001-AAAA-BBBBCCCCDDDD\",\"creation_date\":\"2026-01-15T09:32:11.000Z\",\"modification_date\":\"2026-01-15T09:33:02.000Z\",\"tags\":[\"fattura\",\"2026\",\"acme\"],\"size_bytes\":284512,\"word_count\":421}"
 }
