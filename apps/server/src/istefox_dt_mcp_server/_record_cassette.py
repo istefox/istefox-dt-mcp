@@ -113,6 +113,7 @@ def sanitize_cassette(
     manifest: dict[str, Any],
     *,
     abort_threshold: float = 0.5,
+    real_uuid_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Rewrite a captured cassette to use manifest-stable identifiers.
 
@@ -236,10 +237,27 @@ def sanitize_cassette(
         unknown_paths=unknown_path_counter,
     )
 
+    final_stdout = json.dumps(sanitized_parsed, ensure_ascii=False)
+    final_argv = list(cassette.get("argv", []))
+
+    # Final pass: rewrite any real DT UUID we know about (because the
+    # orchestrator resolved a manifest placeholder against the live DB
+    # before invoking the tool) to its placeholder form. Without this,
+    # the original placeholder UUID -> real UUID mapping leaks via argv
+    # ("apply_tag <real-uuid>") and any other stragglers in stdout that
+    # the structural walker missed.
+    if real_uuid_map:
+        for real_uuid, placeholder in real_uuid_map.items():
+            final_stdout = final_stdout.replace(real_uuid, placeholder)
+            final_argv = [
+                a.replace(real_uuid, placeholder) if isinstance(a, str) else a
+                for a in final_argv
+            ]
+
     return {
         "script": cassette.get("script", ""),
-        "argv": cassette.get("argv", []),
-        "stdout": json.dumps(sanitized_parsed, ensure_ascii=False),
+        "argv": final_argv,
+        "stdout": final_stdout,
     }
 
 
@@ -293,28 +311,32 @@ async def _resolve_placeholder_uuids(
     args: dict[str, Any],
     manifest: dict[str, Any],
     adapter: Any,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, str]]:
     """Translate manifest placeholder UUIDs in ``args`` to live DT UUIDs.
+
+    Returns ``(new_args, real_to_placeholder_map)``. The map records the
+    inverse translation so the sanitizer can rewrite real UUIDs back to
+    placeholders in argv/stdout — without it, the real UUID we passed to
+    the tool leaks via the captured ``argv``.
 
     DEFAULT_INPUTS (and any --input passed by Stefano) reference records
     by their stable manifest placeholder UUIDs (e.g.
     ``FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA``). Live DT4 has its own UUIDs
     generated at record-creation time, so we look up the corresponding
     record by NAME in the live DB and substitute the real UUID before
-    invoking the tool. The post-capture sanitizer handles the reverse
-    mapping in stdout.
+    invoking the tool.
 
     Only the ``uuid`` key is translated — other keys (query, destination,
     tag, ...) pass through. If ``args["uuid"]`` is not a known
     placeholder, it is left untouched (so callers can also pass real
-    UUIDs directly).
+    UUIDs directly) and the returned map is empty.
 
     Calls the adapter via ``_jxa_inline``, which bypasses
     ``_run_script`` and therefore is NOT intercepted by ``_RecorderShim``
     (the shim must be installed AFTER this resolver returns).
     """
     if "uuid" not in args:
-        return args
+        return args, {}
     placeholder = args["uuid"]
 
     record_name: str | None = None
@@ -323,7 +345,7 @@ async def _resolve_placeholder_uuids(
             record_name = rec.get("name")
             break
     if record_name is None:
-        return args
+        return args, {}
 
     db_name = manifest["database"]["name"]
     code = (
@@ -336,9 +358,10 @@ async def _resolve_placeholder_uuids(
     )
     raw = await adapter._jxa_inline(code)
     parsed = raw if isinstance(raw, dict) else json.loads(raw)
+    real_uuid = parsed["uuid"]
     new_args = dict(args)
-    new_args["uuid"] = parsed["uuid"]
-    return new_args
+    new_args["uuid"] = real_uuid
+    return new_args, {real_uuid: placeholder}
 
 
 class _RecorderShim:
@@ -408,7 +431,7 @@ async def record_cassette(
         )
 
     args = dict(input_args if input_args is not None else DEFAULT_INPUTS[tool])
-    args = await _resolve_placeholder_uuids(args, manifest, deps.adapter)
+    args, real_uuid_map = await _resolve_placeholder_uuids(args, manifest, deps.adapter)
     shim = _RecorderShim(deps.adapter)
     shim.install()
 
@@ -441,7 +464,7 @@ async def record_cassette(
             f"Recording {tool} captured nothing. The tool didn't issue a JXA call."
         )
 
-    sanitized = sanitize_cassette(shim.captured, manifest)
+    sanitized = sanitize_cassette(shim.captured, manifest, real_uuid_map=real_uuid_map)
     cassettes_dir.mkdir(parents=True, exist_ok=True)
     out_path = cassettes_dir / f"{tool}.json"
     with out_path.open("w", encoding="utf-8") as fh:
