@@ -5,6 +5,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
+### Added (cassette VCR real-data infrastructure)
+
+- New **`istefox-dt-mcp record-cassette`** CLI subcommand for capturing real JXA output from a live DEVONthink 4 instance into VCR cassettes. Flags: `--tool <name> [--input <json>]` to record a single tool call, or `--all` to record all tools with their default inputs. Output cassettes stored in `tests/contract/cassettes/` (configurable via `--cassettes-dir`).
+- **Post-capture sanitization** via `_record_cassette.py`: rewrites UUIDs (maps to fixture manifest), record names (generic suffixes), and filesystem paths (`/Users/stefanoferri/*` → `/Users/fixture/*`) so captured cassettes are replayable on any machine and don't leak personal data. Driven by canonical fixture manifest at `tests/fixtures/dt-database-manifest.json`.
+- **`scripts/setup_test_database.py`**: idempotent JXA-driven regeneration of the synthetic `fixtures-dt-mcp` DEVONthink 4 database used as the test fixture. Ensures cassette captures are always from a known, reproducible database state.
+- **Output schemas migrated to `LooseModel`** (new base class, `extra='ignore'`): Database, Record, SearchResult, RelatedResult, TagResult, MoveResult, HealthStatus, ClassifySuggestion. Replaces strict `extra='forbid'` validation so live captures with unexpected extra fields don't break replay. Backwards compatible — all existing cassettes still validate and replay.
+- **Developer guide** at `docs/development/cassette-recording.md`: workflow for recording new cassettes on a live DEVONthink instance and sanitizing them for version control.
+- **Cassette invariant tests** (2 new, appended to `tests/contract/test_jxa_replay.py`): verify no personal filesystem paths, no `<UNKNOWN_*>` placeholders in any cassette fixture.
+- **10 unit tests** in `tests/unit/test_record_cassette.py`: sanitization logic (UUID rewrites, path rewrites, name anonymization), orchestrator, CLI integration.
+
 ### Added (summarize_topic)
 
 - New read-only MCP tool **`summarize_topic`** that retrieves records related

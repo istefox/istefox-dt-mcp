@@ -28,6 +28,24 @@ class StrictModel(BaseModel):
     )
 
 
+class LooseModel(BaseModel):
+    """Base for OUTPUT models parsed from external sources (JXA, RAG, etc.).
+
+    Same defaults as StrictModel except extra='ignore' — accept fields DT or
+    other adapters may add in future versions without breaking replay tests
+    or downstream consumers. Input models (validating LLM/user input) keep
+    StrictModel; only models that wrap data from outside our control use
+    LooseModel.
+    """
+
+    model_config = ConfigDict(
+        extra="ignore",
+        frozen=False,
+        str_strip_whitespace=True,
+        validate_assignment=True,
+    )
+
+
 class RecordKind(StrEnum):
     """DEVONthink record kinds. Maps to `record.kind()` JXA values."""
 
@@ -44,7 +62,7 @@ class RecordKind(StrEnum):
     UNKNOWN = "unknown"
 
 
-class Database(StrictModel):
+class Database(LooseModel):
     """A DEVONthink database (top-level container)."""
 
     uuid: str
@@ -54,7 +72,7 @@ class Database(StrictModel):
     record_count: int | None = None
 
 
-class Record(StrictModel):
+class Record(LooseModel):
     """A DEVONthink record (document, group, bookmark, ...)."""
 
     uuid: str
@@ -72,7 +90,7 @@ class Record(StrictModel):
     word_count: int | None = None
 
 
-class SearchResult(StrictModel):
+class SearchResult(LooseModel):
     """One hit returned by the bridge search operation."""
 
     uuid: str
@@ -83,7 +101,7 @@ class SearchResult(StrictModel):
     snippet: str | None = None
 
 
-class RelatedResult(StrictModel):
+class RelatedResult(LooseModel):
     """One hit returned by find_related (See Also / Compare)."""
 
     uuid: str
@@ -102,7 +120,7 @@ class WriteOutcome(StrEnum):
     REJECTED = "rejected"
 
 
-class TagResult(StrictModel):
+class TagResult(LooseModel):
     """Result of an apply_tag operation."""
 
     uuid: str
@@ -111,7 +129,7 @@ class TagResult(StrictModel):
     tags_after: list[str]
 
 
-class MoveResult(StrictModel):
+class MoveResult(LooseModel):
     """Result of a move_record operation."""
 
     uuid: str
@@ -120,7 +138,7 @@ class MoveResult(StrictModel):
     location_after: str
 
 
-class HealthStatus(StrictModel):
+class HealthStatus(LooseModel):
     """Bridge health check output.
 
     `bridge_ready` requires BOTH process running AND data-access
@@ -138,7 +156,7 @@ class HealthStatus(StrictModel):
     recovery_hint: str | None = None
 
 
-class ClassifySuggestion(StrictModel):
+class ClassifySuggestion(LooseModel):
     """One destination group suggested by DT4 native classifier."""
 
     location: str

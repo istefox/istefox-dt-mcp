@@ -265,7 +265,19 @@ uv run istefox-dt-mcp --help
 uv run istefox-dt-mcp doctor       # health check (requires DT running)
 uv run istefox-dt-mcp serve        # stdio server (for Claude Desktop)
 uv run istefox-dt-mcp audit list --recent 5   # last 5 audit entries
+
+# VCR cassette recording (see docs/development/cassette-recording.md)
+uv run istefox-dt-mcp record-cassette --tool search
+uv run istefox-dt-mcp record-cassette --all
 ```
+
+---
+
+## Testing
+
+Unit, contract, and integration tests use `pytest`. For details on capturing new VCR cassettes from a live DEVONthink instance, see [`docs/development/cassette-recording.md`](docs/development/cassette-recording.md).
+
+---
 
 ## Performance tuning (env vars)
 

@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "database": {
+    "name": "fixtures-dt-mcp",
+    "uuid_placeholder": "FIXTURE-DB-0001-AAAA-AAAAAAAAAAAA"
+  },
+  "groups": [
+    {"path": "/Inbox", "uuid_placeholder": "FIXTURE-GRP-INBOX-0000-AAAAAAAAAAAA"},
+    {"path": "/Archive", "uuid_placeholder": "FIXTURE-GRP-ARCHIVE-00-AAAAAAAAAAAA"},
+    {"path": "/Archive/2025", "uuid_placeholder": "FIXTURE-GRP-2025-0000-AAAAAAAAAAAA"}
+  ],
+  "records": [
+    {
+      "uuid_placeholder": "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA",
+      "name": "Sample PDF Invoice 2025",
+      "kind": "PDF",
+      "location": "/Inbox",
+      "tags": ["invoices", "2025"],
+      "creation_date": "2025-03-15T10:00:00Z",
+      "modification_date": "2025-03-15T10:00:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0002-AAAA-AAAAAAAAAAAA",
+      "name": "Sample Markdown Note",
+      "kind": "markdown",
+      "location": "/Archive/2025",
+      "tags": ["notes"],
+      "creation_date": "2025-06-01T14:30:00Z",
+      "modification_date": "2025-06-01T14:30:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0003-AAAA-AAAAAAAAAAAA",
+      "name": "Sample HTML Article",
+      "kind": "html",
+      "location": "/Archive",
+      "tags": ["articles"],
+      "creation_date": "2025-04-20T09:15:00Z",
+      "modification_date": "2025-04-20T09:15:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0004-AAAA-AAAAAAAAAAAA",
+      "name": "Sample RTF Memo",
+      "kind": "rtf",
+      "location": "/Inbox",
+      "tags": ["memos"],
+      "creation_date": "2025-05-10T11:00:00Z",
+      "modification_date": "2025-05-10T11:00:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0005-AAAA-AAAAAAAAAAAA",
+      "name": "Sample Plain Text Note",
+      "kind": "txt",
+      "location": "/Inbox",
+      "tags": ["notes", "draft"],
+      "creation_date": "2025-07-01T08:00:00Z",
+      "modification_date": "2025-07-01T08:00:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0006-AAAA-AAAAAAAAAAAA",
+      "name": "Sample WebArchive",
+      "kind": "webarchive",
+      "location": "/Archive/2025",
+      "tags": ["clipping"],
+      "creation_date": "2025-08-15T16:45:00Z",
+      "modification_date": "2025-08-15T16:45:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0007-AAAA-AAAAAAAAAAAA",
+      "name": "Sample Bookmark",
+      "kind": "bookmark",
+      "location": "/Archive",
+      "tags": ["bookmark", "reference"],
+      "creation_date": "2025-09-01T12:00:00Z",
+      "modification_date": "2025-09-01T12:00:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0008-AAAA-AAAAAAAAAAAA",
+      "name": "Sample Image",
+      "kind": "image",
+      "location": "/Archive/2025",
+      "tags": ["screenshot"],
+      "creation_date": "2025-10-12T13:30:00Z",
+      "modification_date": "2025-10-12T13:30:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0009-AAAA-AAAAAAAAAAAA",
+      "name": "Sample Second PDF",
+      "kind": "PDF",
+      "location": "/Inbox",
+      "tags": ["invoices", "2024"],
+      "creation_date": "2024-11-05T15:00:00Z",
+      "modification_date": "2024-11-05T15:00:00Z"
+    },
+    {
+      "uuid_placeholder": "FIXTURE-REC-0010-AAAA-AAAAAAAAAAAA",
+      "name": "Sample Tagged Reference",
+      "kind": "markdown",
+      "location": "/Archive",
+      "tags": ["reference", "starred"],
+      "creation_date": "2025-02-28T17:30:00Z",
+      "modification_date": "2025-02-28T17:30:00Z"
+    }
+  ]
+}

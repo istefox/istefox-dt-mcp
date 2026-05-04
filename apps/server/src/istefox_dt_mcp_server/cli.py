@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 import click
@@ -310,6 +311,106 @@ def watch(port: int, databases: tuple[str, ...], reconcile_interval_s: int) -> N
         asyncio.run(run())
     finally:
         listener.stop()
+
+
+@cli.command(name="record-cassette")
+@click.option(
+    "--tool",
+    type=str,
+    default=None,
+    help="Tool name to record (e.g. list_databases). Mutually exclusive with --all.",
+)
+@click.option(
+    "--input",
+    "input_json",
+    type=str,
+    default=None,
+    help='JSON args for the tool, e.g. \'{"uuid": "..."}\'. If omitted, uses DEFAULT_INPUTS.',
+)
+@click.option(
+    "--all",
+    "record_all",
+    is_flag=True,
+    default=False,
+    help="Record all 6 supported cassettes in sequence using DEFAULT_INPUTS.",
+)
+@click.option(
+    "--cassettes-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Override cassettes directory. Default: tests/contract/cassettes/.",
+)
+def record_cassette(
+    tool: str | None,
+    input_json: str | None,
+    record_all: bool,
+    cassettes_dir: Path | None,
+) -> None:
+    """Capture a fresh cassette by running a tool against live DEVONthink.
+
+    Requires the synthetic fixture database `fixtures-dt-mcp` to be present
+    in DT (run `python scripts/setup_test_database.py` first if missing).
+
+    Examples:
+
+      # Record one cassette
+      istefox-dt-mcp record-cassette --tool list_databases
+
+      # Record one with custom args
+      istefox-dt-mcp record-cassette --tool search_bm25 --input '{"query":"Foo"}'
+
+      # Record all 6 in sequence
+      istefox-dt-mcp record-cassette --all
+    """
+    import json as _json
+
+    from ._record_cassette import (
+        SUPPORTED_TOOLS,
+        SanitizationError,
+        load_manifest,
+    )
+    from ._record_cassette import (
+        record_cassette as _record,
+    )
+
+    if record_all and tool:
+        click.echo("--all and --tool are mutually exclusive.", err=True)
+        sys.exit(2)
+    if not record_all and not tool:
+        click.echo("Provide either --tool <name> or --all.", err=True)
+        sys.exit(2)
+
+    if cassettes_dir is None:
+        repo_root = Path(__file__).resolve().parents[5]
+        cassettes_dir = repo_root / "tests" / "contract" / "cassettes"
+
+    parsed_args = _json.loads(input_json) if input_json else None
+    manifest = load_manifest()
+
+    async def run_one(tool_name: str, args: dict[str, Any] | None) -> None:
+        deps = build_default_deps()
+        try:
+            out_path = await _record(
+                tool=tool_name,
+                input_args=args,
+                deps=deps,
+                cassettes_dir=cassettes_dir,
+                manifest=manifest,
+            )
+            click.echo(f"✅ wrote {out_path}")
+        except SanitizationError as e:
+            click.echo(f"❌ sanitization failed for {tool_name}: {e}", err=True)
+            sys.exit(1)
+        except Exception as e:  # pragma: no cover — surface generic JXA failures
+            click.echo(f"❌ recording {tool_name} failed: {e}", err=True)
+            sys.exit(1)
+
+    if record_all:
+        for t in SUPPORTED_TOOLS:
+            asyncio.run(run_one(t, None))
+    else:
+        assert tool is not None
+        asyncio.run(run_one(tool, parsed_args))
 
 
 def main() -> None:
