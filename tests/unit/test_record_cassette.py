@@ -249,10 +249,11 @@ async def test_resolve_placeholder_uuids_translates_known_placeholder() -> None:
     adapter._jxa_inline = AsyncMock(return_value={"uuid": "REAL-DT-UUID-12345"})
 
     args_in = {"uuid": "FIXTURE-REC-0001", "tag": "review"}
-    args_out = await _resolve_placeholder_uuids(args_in, _MANIFEST, adapter)
+    args_out, real_map = await _resolve_placeholder_uuids(args_in, _MANIFEST, adapter)
 
     assert args_out["uuid"] == "REAL-DT-UUID-12345"
     assert args_out["tag"] == "review"
+    assert real_map == {"REAL-DT-UUID-12345": "FIXTURE-REC-0001"}
     adapter._jxa_inline.assert_awaited_once()
 
 
@@ -268,9 +269,10 @@ async def test_resolve_placeholder_uuids_passes_through_unknown() -> None:
     adapter._jxa_inline = AsyncMock()
 
     args_in = {"uuid": "SOME-UNKNOWN-UUID-NOT-IN-MANIFEST"}
-    args_out = await _resolve_placeholder_uuids(args_in, _MANIFEST, adapter)
+    args_out, real_map = await _resolve_placeholder_uuids(args_in, _MANIFEST, adapter)
 
     assert args_out == args_in
+    assert real_map == {}
     adapter._jxa_inline.assert_not_awaited()
 
 
@@ -359,3 +361,26 @@ def test_sanitize_rewrites_uuid_in_reference_url() -> None:
     assert parsed[0]["uuid"] == "FIXTURE-REC-0001"
     assert parsed[0]["reference_url"] == "x-devonthink-item://FIXTURE-REC-0001"
     assert "2BB80D07" not in out["stdout"]
+
+
+def test_sanitize_rewrites_real_uuid_in_argv() -> None:
+    """The real DT UUID we passed into the tool (via argv) must be rewritten
+    back to the manifest placeholder. Without this, every uuid-taking tool
+    (apply_tag, get_record, ...) leaks the live DT UUID via the captured
+    argv list."""
+    captured = {
+        "script": "apply_tag.js",
+        "argv": ["2BB80D07-0239-4322-B798-726E479EDBF5", "review"],
+        "stdout": json.dumps(
+            {
+                "uuid": "2BB80D07-0239-4322-B798-726E479EDBF5",
+                "name": "Sample PDF Invoice 2025",
+                "location": "/Inbox",
+            }
+        ),
+    }
+    real_map = {"2BB80D07-0239-4322-B798-726E479EDBF5": "FIXTURE-REC-0001"}
+    out = sanitize_cassette(captured, _MANIFEST, real_uuid_map=real_map)
+    assert out["argv"] == ["FIXTURE-REC-0001", "review"]
+    assert "2BB80D07" not in out["stdout"]
+    assert "2BB80D07" not in json.dumps(out["argv"])
