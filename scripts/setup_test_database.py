@@ -58,11 +58,17 @@ def _ensure_database(db_name: str) -> str:
       JSON.stringify({{action: "reused", uuid: existing[0].uuid()}});
     }} else {{
       const newDbPath = ObjC.unwrap(
-        $.NSString.stringWithString("~/Library/Application Support/DEVONthink/{db_name}.dtBase2")
+        $.NSString.stringWithString("~/Databases/{db_name}.dtBase2")
           .stringByExpandingTildeInPath
       );
-      const newDb = dt.createDatabase(newDbPath);
-      JSON.stringify({{action: "created", uuid: newDb.uuid()}});
+      dt.createDatabase(newDbPath);
+      // DT4 JXA quirk: createDatabase return value is unreliable (often null).
+      // Re-lookup by name to get a valid reference.
+      const created = dt.databases().filter(d => d.name() === "{db_name}");
+      if (created.length === 0) {{
+        throw new Error("createDatabase did not produce a database named '{db_name}' in dt.databases()");
+      }}
+      JSON.stringify({{action: "created", uuid: created[0].uuid()}});
     }}
     """
     rc, stdout, stderr = _run_jxa(script)
