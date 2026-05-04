@@ -1,6 +1,6 @@
 # `create_smart_rule` Tool — Design Spec
 
-- **Status**: **DRAFT** — pending user review of ADR-0009
+- **Status**: **Approved** (2026-05-04 — ADR-0009 accepted with V4 = delete-only + explicit caveat)
 - **Target version**: 0.2.0 (after `summarize_topic` lands)
 - **Owner**: istefox
 - **Scope**: new write-only MCP tool that programmatically creates DEVONthink smart rules
@@ -127,10 +127,18 @@ class CreateSmartRuleResult(StrictModel):
     actions_count: int
     dry_run: bool
     preview: str | None = None  # human-readable summary, populated on dry_run
+    caveat: str = (
+        "Undoing this rule will only delete the rule itself. Records modified "
+        "by its 'On Demand' firings will NOT be reverted automatically. If you "
+        "need granular rollback, undo each firing's audit_id separately or use "
+        "file_document/bulk_apply to manually revert."
+    )
 
 class CreateSmartRuleOutput(Envelope[CreateSmartRuleResult]):
     pass
 ```
+
+The `caveat` field is **always present** in both dry-run and apply responses, so the LLM consumer always sees the limitation when narrating the result to the user. See [ADR-0009 V4](../../adr/0009-create-smart-rule-scope.md) for the rationale and the future-work design (firing tracking via webhook, opt-in via env var).
 
 ## 7. Behavior matrix
 

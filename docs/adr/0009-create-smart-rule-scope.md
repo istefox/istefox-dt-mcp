@@ -1,6 +1,6 @@
 # ADR 0009 — `create_smart_rule` scope and safety boundaries
 
-- **Status**: **Proposed** (awaiting user approval)
+- **Status**: **Accepted** (approved 2026-05-04)
 - **Date**: 2026-05-04
 - **Decisori**: Stefano Ferri
 - **Predecessor**: ADR-0004 (MVP tool scope) deferred `create_smart_rule` to v2; this ADR resurfaces it for 0.2.0 with explicit guardrails
@@ -48,15 +48,42 @@ Una rule = una singola database (input field `database: str`). DT model permette
 
 **Costo**: minimo.
 
-### V4 — Undo = delete-only, no record-action rollback
+### V4 — Undo = delete-only + caveat esplicito; no record-action rollback in v1
 
 `undo` di un `create_smart_rule` audit_id elimina la rule stessa via `delete_smart_rule(uuid)`. **Non** rollback le azioni che la rule ha applicato sui record dalla creazione in poi (move, tag, ecc. su record che la rule ha matchato).
 
-**Motivazione**: il connector audit log non traccia per-firing record changes — quelle azioni vivono in DT, fuori dal nostro perimetro di osservabilità. Tracciarle richiederebbe un trigger DT separato che POSTa al webhook locale per ogni firing — troppa infrastruttura per il payoff.
+**Mitigazione esplicita (decisione 2026-05-04)**: il response del `create_smart_rule` include un campo `caveat: str` che esplicita la limitazione, in modo che l'LLM consumer possa ripeterla all'utente:
 
-**Costo**: l'utente che fa undo molto dopo la creazione potrebbe ritrovarsi con record ancora moss/taggati dalla rule disabilitata. Documentato come limitazione nota nel tool description e nel CHANGELOG.
+```json
+{
+  ...,
+  "caveat": "Undoing this rule will only delete the rule itself. Records modified by its 'On Demand' firings will NOT be reverted automatically. If you need granular rollback, undo each firing's audit_id separately or use file_document/bulk_apply to manually revert."
+}
+```
 
-**Future**: 0.3.0+ può aggiungere "rule firing log via webhook" che registra ogni applicazione automatica nell'audit log connector — abilita rollback granulare. Pre-requisito: l'infrastruttura webhook che già esiste per la sync sidecar.
+Il tool description dichiara la stessa limitazione tra "Don't use for".
+
+**Motivazione**: il connector audit log non traccia per-firing record changes — quelle azioni vivono in DT, fuori dal nostro perimetro di osservabilità. Tracciarle richiederebbe un trigger DT separato che POSTa al webhook locale per ogni firing — troppa infrastruttura per il payoff in v1.
+
+**Costo accettato**: l'utente che fa undo molto dopo la creazione potrebbe ritrovarsi con record ancora moss/taggati dalla rule disabilitata. Documentato come limitazione nota nel tool description, nel CHANGELOG, e nel response stesso (`caveat` field).
+
+### V4 — Future work (0.3.0+, opt-in)
+
+Quando ci sarà evidenza di domanda utente reale (target: ≥3 commenti indipendenti che chiedono "voglio undo completo delle smart rule" su Reddit/forum DT/issue GitHub), implementare un sistema opt-in di firing tracking:
+
+- Env var `ISTEFOX_SMART_RULE_AUDIT_FIRING=1` (default off — overhead opzionale).
+- Quando attivata: la rule generata include un'azione `track firing` che POSTa al webhook locale per ogni esecuzione.
+- Il webhook crea un audit log entry per ogni record toccato da quella firing, con `before_state` per granular rollback.
+- `undo` del `create_smart_rule` audit_id itera tutti i firing-children e fa rollback di ognuno.
+
+Pre-requisito: l'infrastruttura webhook locale (già esiste per la sync sidecar — vedi `apps/server/src/istefox_dt_mcp_server/webhook.py`).
+
+Trade-off del sistema opt-in:
+- Overhead: una action slot DT consumata, +1 audit entry per ogni record toccato per ogni firing
+- Complessità undo: ricorsivo, gestione drift per ogni record toccato (potenzialmente molti)
+- Storage: l'audit DB cresce molto più in fretta su rule che firano spesso
+
+Senza domanda dimostrata, **non si implementa** in 0.2.0 né in 0.3.0 — rimane come "design pronto" da pescare se serve.
 
 ## Conseguenze
 
