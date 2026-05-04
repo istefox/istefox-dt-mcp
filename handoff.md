@@ -111,12 +111,20 @@ Sessione lunga ~10 ore divisa in 3 fasi.
 
 ### 0.2.0 roadmap (vedi CHANGELOG sezione Unreleased)
 
-- ✅ **Drift detection 3-stati** (`no_drift` / `already_reverted` / `hostile_drift`) per ridurre falsi positivi `--force` — landed in PR #43 (commit `247141e`, 2026-05-03). Spec + plan sotto `docs/superpowers/specs/` e `docs/superpowers/plans/`. Scope: `file_document` undo. Bulk_apply lasciato a 0.3.0+.
-- RAG benchmark cross-corpus (≥3 corpus, ≥2 early adopter) + flip default modello (ADR-008)
-- HTTP transport + OAuth multi-device (ADR-006)
-- Tool aggiuntivi: `summarize_topic`, `create_smart_rule`
-- Cassette VCR catturate da DT vivo (oggi sintetiche ma matching shape)
-- Per-op drift detection per `bulk_apply` undo (richiede schema upgrade audit log per per-op after-snapshots)
+- ✅ **Drift detection 3-stati** (`no_drift` / `already_reverted` / `hostile_drift`) — landed in PR #43 (`247141e`, 2026-05-03). Scope: `file_document` undo. Bulk_apply lasciato a 0.3.0+.
+- ✅ **`summarize_topic`** — server-side clustering retrieval, landed in PR #45 (`8959ec2`, 2026-05-04). 4 dimensioni (date, tags, kind, location), default cluster_by `["date", "tags"]`.
+- ⏸️ **`create_smart_rule`** — **DEFERRED a 0.3.0+** per limite SDK DT4 (issue #47). DT4 4.2.2 NON espone create/delete via scripting; solo `perform smart rule` esiste. Spec, ADR-0009, plan, discovery committati su branch `spec/create-smart-rule` e `feat/create-smart-rule` come artifact riusabili quando l'SDK gap si chiude.
+- RAG benchmark cross-corpus (≥3 corpus, ≥2 early adopter) + flip default modello (ADR-008) — bloccato su early adopter
+- HTTP transport + OAuth multi-device (ADR-006) — scope grosso, ADR da finalizzare
+- Cassette VCR catturate da DT vivo — non iniziato, mezza giornata stimata
+- Per-op drift detection per `bulk_apply` undo — richiede schema upgrade audit log
+
+### Branch in stallo (riapribili in futuro)
+
+- `feat/create-smart-rule` (su origin) — contiene solo il commit `ee9317f` con la discovery JXA. Niente codice. Riusabile come reference se DT4 SDK aggiunge i verbi mancanti.
+- `spec/create-smart-rule` (su origin) — contiene spec, ADR-0009 (Accepted), plan e relativa documentazione. Riusabile quando l'unblock arriva.
+
+Stefano può cancellarli in qualsiasi momento via web UI; il sistema mi ha negato la cancellazione remota (giustamente — destructive su shared state).
 
 ---
 
