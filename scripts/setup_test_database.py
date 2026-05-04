@@ -118,26 +118,74 @@ def _ensure_group(db_name: str, path: str) -> str:
     return str(result["uuid"])
 
 
+# Manifest "kind" values mirror RecordKind (the read-side enum returned by
+# record.kind()). DT4's createRecordWith expects a different "type" enum on
+# the write side. Map the read-side strings to the write-side ones here.
+_KIND_TO_DT4_TYPE = {
+    "PDF": "PDF document",
+    "rtf": "rtf",
+    "markdown": "markdown",
+    "txt": "text",
+    "webarchive": "webarchive",
+    "bookmark": "bookmark",
+    "html": "html",
+    "image": "picture",
+}
+
+
 def _ensure_record(db_name: str, rec: dict[str, object]) -> tuple[str, str]:
     """Returns (action, uuid). action in {created, skipped}."""
+    kind = str(rec["kind"])
+    dt4_type = _KIND_TO_DT4_TYPE.get(kind)
+    if dt4_type is None:
+        raise RuntimeError(
+            f"Unsupported manifest kind '{kind}' for record '{rec['name']}'. "
+            f"Add a mapping to _KIND_TO_DT4_TYPE."
+        )
+
+    location = str(rec.get("location") or "/")
+    location_parts = [p for p in location.split("/") if p]
+
     script = f"""
     const dt = Application("DEVONthink");
     const dbs = dt.databases().filter(d => d.name() === "{db_name}");
     if (dbs.length === 0) throw new Error("DB not found");
     const db = dbs[0];
 
-    const matching = db.contents().filter(r =>
+    // Walk to the destination group from db.root.
+    let parent = db.root;
+    const locParts = {json.dumps(location_parts)};
+    for (const part of locParts) {{
+      const matches = parent.children().filter(c =>
+        c.name() === part && c.recordType() === "group"
+      );
+      if (matches.length === 0) {{
+        throw new Error("Group not found in path: " + part);
+      }}
+      parent = matches[0];
+    }}
+
+    // Skip if a record with this name already exists anywhere in the DB.
+    const existing = db.contents().filter(r =>
       r.name() === {json.dumps(rec['name'])}
     );
-    if (matching.length > 0) {{
-      JSON.stringify({{action: "skipped", uuid: matching[0].uuid()}});
+    if (existing.length > 0) {{
+      JSON.stringify({{action: "skipped", uuid: existing[0].uuid()}});
     }} else {{
-      const newRec = dt.createRecord({{
+      // DT4 quirk: createRecordWith returns a reference that is sometimes
+      // null in JXA. Lookup-by-name after creation to get a stable handle.
+      dt.createRecordWith({{
         name: {json.dumps(rec['name'])},
-        type: {json.dumps(rec['kind'])},
-      }}, {{in: db.root}});
-      newRec.tags = {json.dumps(rec.get('tags', []))};
-      JSON.stringify({{action: "created", uuid: newRec.uuid()}});
+        type: {json.dumps(dt4_type)},
+      }}, {{in: parent}});
+      const created = parent.children().filter(r =>
+        r.name() === {json.dumps(rec['name'])}
+      );
+      if (created.length === 0) {{
+        throw new Error("createRecordWith did not produce '{rec['name']}'");
+      }}
+      created[0].tags = {json.dumps(rec.get('tags', []))};
+      JSON.stringify({{action: "created", uuid: created[0].uuid()}});
     }}
     """
     rc, stdout, stderr = _run_jxa(script)
