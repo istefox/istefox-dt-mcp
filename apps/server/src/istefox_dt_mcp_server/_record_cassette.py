@@ -190,3 +190,139 @@ def load_manifest(path: Path | None = None) -> dict[str, Any]:
     with path.open(encoding="utf-8") as fh:
         data: dict[str, Any] = json.load(fh)
     return data
+
+
+# ----------------------------------------------------------------------
+# Recording orchestrator
+# ----------------------------------------------------------------------
+
+
+# Default inputs for the --all mode. Each entry is the JSON args the CLI
+# would pass via --input; subagent/Stefano can override per-tool when
+# recording manually.
+DEFAULT_INPUTS: dict[str, dict[str, Any]] = {
+    "list_databases": {},
+    "search_bm25": {"query": "Sample", "databases": ["fixtures-dt-mcp"]},
+    "find_related": {"uuid": "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA", "k": 5},
+    "get_record": {"uuid": "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA"},
+    "apply_tag": {
+        "uuid": "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA",
+        "tag": "review",
+    },
+    "move_record": {
+        "uuid": "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA",
+        "destination": "/Archive",
+    },
+}
+
+
+SUPPORTED_TOOLS: tuple[str, ...] = tuple(DEFAULT_INPUTS.keys())
+
+
+class _RecorderShim:
+    """Wraps an adapter's _run_script to intercept the FIRST JXA call.
+
+    After the first call, subsequent calls pass through unchanged.
+    The captured (script, argv, stdout) is exposed via .captured.
+    """
+
+    def __init__(self, adapter: Any) -> None:
+        self._adapter = adapter
+        self._original = adapter._run_script
+        self.captured: dict[str, Any] | None = None
+
+    async def _wrapped(self, script: str, *args: Any, **kwargs: Any) -> Any:
+        result = await self._original(script, *args, **kwargs)
+        if self.captured is None:
+            argv = list(args) + [str(v) for v in kwargs.values()]
+            self.captured = {
+                "script": "<inline>.js",
+                "argv": argv,
+                "stdout": result if isinstance(result, str) else json.dumps(result),
+            }
+        return result
+
+    def install(self) -> None:
+        self._adapter._run_script = self._wrapped
+
+    def uninstall(self) -> None:
+        self._adapter._run_script = self._original
+
+
+async def record_cassette(
+    *,
+    tool: str,
+    input_args: dict[str, Any] | None = None,
+    deps: Any,
+    cassettes_dir: Path,
+    manifest: dict[str, Any],
+) -> Path:
+    """Record a single cassette by invoking the named tool against live DT.
+
+    Steps:
+      1. Validate ``tool`` is in SUPPORTED_TOOLS.
+      2. Wrap deps.adapter._run_script with _RecorderShim.
+      3. Look up the tool's adapter method by name and invoke with input_args.
+      4. Sanitize the captured stdout via sanitize_cassette.
+      5. Write the result to ``cassettes_dir / f"{tool}.json"``.
+
+    Args:
+        tool: Name of the tool to record (must be in SUPPORTED_TOOLS).
+        input_args: Args dict to pass to the tool. If None, uses DEFAULT_INPUTS[tool].
+        deps: Live Deps with a real JXAAdapter (NOT mocked).
+        cassettes_dir: Directory to write the cassette JSON into. Created if missing.
+        manifest: Loaded fixture-DB manifest (use load_manifest()).
+
+    Returns:
+        Path to the written cassette file.
+
+    Raises:
+        ValueError: tool not in SUPPORTED_TOOLS.
+        SanitizationError: capture didn't match the manifest.
+    """
+    if tool not in SUPPORTED_TOOLS:
+        raise ValueError(
+            f"Unsupported tool {tool!r}. Supported: {', '.join(SUPPORTED_TOOLS)}"
+        )
+
+    args = input_args if input_args is not None else DEFAULT_INPUTS[tool]
+    shim = _RecorderShim(deps.adapter)
+    shim.install()
+
+    try:
+        if tool == "list_databases":
+            await deps.adapter.list_databases()
+        elif tool == "search_bm25":
+            await deps.adapter.search(
+                args["query"],
+                databases=args.get("databases"),
+                max_results=args.get("max_results", 10),
+            )
+        elif tool == "find_related":
+            await deps.adapter.find_related(args["uuid"], k=args.get("k", 10))
+        elif tool == "get_record":
+            await deps.adapter.get_record(args["uuid"])
+        elif tool == "apply_tag":
+            await deps.adapter.apply_tag(args["uuid"], args["tag"], dry_run=False)
+        elif tool == "move_record":
+            await deps.adapter.move_record(
+                args["uuid"], args["destination"], dry_run=False
+            )
+        else:  # pragma: no cover — guarded by the SUPPORTED_TOOLS check above
+            raise AssertionError("unreachable")
+    finally:
+        shim.uninstall()
+
+    if shim.captured is None:
+        raise RuntimeError(
+            f"Recording {tool} captured nothing. The tool didn't issue a JXA call."
+        )
+
+    sanitized = sanitize_cassette(shim.captured, manifest)
+    cassettes_dir.mkdir(parents=True, exist_ok=True)
+    out_path = cassettes_dir / f"{tool}.json"
+    with out_path.open("w", encoding="utf-8") as fh:
+        json.dump(sanitized, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    log.info("cassette_recorded", tool=tool, path=str(out_path))
+    return out_path

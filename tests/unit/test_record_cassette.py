@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from istefox_dt_mcp_server._record_cassette import (
@@ -139,3 +140,96 @@ def test_sanitize_handles_empty_stdout() -> None:
     captured = {"script": "x.js", "argv": [], "stdout": ""}
     out = sanitize_cassette(captured, _MANIFEST)
     assert out["stdout"] == ""
+
+
+# ----------------------------------------------------------------------
+# record_cassette orchestrator (with mocked adapter)
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_record_cassette_writes_correct_format(tmp_path) -> None:
+    """End-to-end: recorder captures the first JXA call and writes to disk."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import record_cassette
+
+    deps = MagicMock()
+    captured_stdout = json.dumps(
+        [
+            {
+                "uuid": "DT-RUNTIME-XYZ",
+                "name": "fixtures-dt-mcp",
+                "path": "/Users/john/Library/db.dtBase2",
+            }
+        ]
+    )
+    deps.adapter._run_script = AsyncMock(return_value=captured_stdout)
+
+    async def fake_list_databases() -> Any:
+        return await deps.adapter._run_script("list_databases.js")
+
+    deps.adapter.list_databases = fake_list_databases
+
+    out_path = await record_cassette(
+        tool="list_databases",
+        deps=deps,
+        cassettes_dir=tmp_path,
+        manifest=_MANIFEST,
+    )
+
+    assert out_path.exists()
+    cassette = json.loads(out_path.read_text())
+    assert "script" in cassette
+    assert "argv" in cassette
+    assert "stdout" in cassette
+    assert "/Users/fixture/" in cassette["stdout"]
+
+
+@pytest.mark.asyncio
+async def test_record_cassette_rejects_unsupported_tool(tmp_path) -> None:
+    from unittest.mock import MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import record_cassette
+
+    with pytest.raises(ValueError, match="Unsupported tool"):
+        await record_cassette(
+            tool="nonexistent",
+            deps=MagicMock(),
+            cassettes_dir=tmp_path,
+            manifest=_MANIFEST,
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_cassette_uses_default_inputs(tmp_path) -> None:
+    """If input_args is None, the recorder uses DEFAULT_INPUTS[tool]."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import (
+        DEFAULT_INPUTS,
+        record_cassette,
+    )
+
+    deps = MagicMock()
+    deps.adapter._run_script = AsyncMock(
+        return_value=json.dumps({"uuid": "x", "name": "Sample PDF Invoice 2025"})
+    )
+
+    capture_args: dict[str, Any] = {}
+
+    async def fake_get_record(uuid: str) -> Any:
+        capture_args["uuid"] = uuid
+        return await deps.adapter._run_script("get_record.js", uuid)
+
+    deps.adapter.get_record = fake_get_record
+
+    await record_cassette(
+        tool="get_record",
+        input_args=None,
+        deps=deps,
+        cassettes_dir=tmp_path,
+        manifest=_MANIFEST,
+    )
+
+    assert capture_args["uuid"] == DEFAULT_INPUTS["get_record"]["uuid"]
