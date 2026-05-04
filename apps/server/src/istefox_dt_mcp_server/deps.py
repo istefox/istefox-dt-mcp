@@ -71,6 +71,7 @@ def build_default_deps(
     data_dir: Path | None = None,
     pool_size: int = 4,
     timeout_s: float = 5.0,
+    cache_enabled: bool = True,
 ) -> Deps:
     """Wire the default production dependency graph.
 
@@ -78,11 +79,20 @@ def build_default_deps(
     The default is `NoopRAGProvider` so the server starts fast and
     works without any extra setup; enable Chroma with
     `ISTEFOX_RAG_ENABLED=1`.
+
+    Set ``cache_enabled=False`` to skip the on-disk SQLite cache. Used
+    by ``record-cassette``: the cache TTL on read tools (e.g. 5min on
+    list_databases) would otherwise short-circuit the JXA call on
+    repeated captures and the recorder shim would see no traffic.
     """
     base = data_dir or DEFAULT_DATA_DIR
     base.mkdir(parents=True, exist_ok=True)
 
-    cache = SQLiteCache(base / "cache.sqlite", default_ttl_s=60.0)
+    cache = (
+        SQLiteCache(base / "cache.sqlite", default_ttl_s=60.0)
+        if cache_enabled
+        else None
+    )
     adapter = JXAAdapter(pool_size=pool_size, timeout_s=timeout_s, cache=cache)
     audit = AuditLog(base / "audit.sqlite")
     translator = Translator()
