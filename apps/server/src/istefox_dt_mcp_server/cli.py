@@ -381,7 +381,9 @@ def record_cassette(
         sys.exit(2)
 
     if cassettes_dir is None:
-        repo_root = Path(__file__).resolve().parents[5]
+        # __file__ at apps/server/src/istefox_dt_mcp_server/cli.py
+        # → parents[4] is the repo root containing apps/ and tests/.
+        repo_root = Path(__file__).resolve().parents[4]
         cassettes_dir = repo_root / "tests" / "contract" / "cassettes"
 
     parsed_args = _json.loads(input_json) if input_json else None
