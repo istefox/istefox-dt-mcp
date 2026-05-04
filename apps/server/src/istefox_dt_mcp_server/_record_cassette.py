@@ -157,11 +157,7 @@ def sanitize_cassette(
                 db_name_to_uuid if _is_database_node(node) else record_name_to_uuid
             )
             for key, val in node.items():
-                if (
-                    key == "uuid"
-                    and isinstance(val, str)
-                    and name_field in scoped_map
-                ):
+                if key == "uuid" and isinstance(val, str) and name_field in scoped_map:
                     new[key] = scoped_map[name_field]
                     total_count += 1
                 elif key == "uuid" and isinstance(val, str):
