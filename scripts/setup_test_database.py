@@ -104,7 +104,9 @@ def _ensure_group(db_name: str, path: str) -> str:
     """
     rc, stdout, stderr = _run_jxa(script)
     if rc != 0:
-        raise RuntimeError(f"Group ensure failed for {path}: {stderr.strip() or stdout.strip()}")
+        raise RuntimeError(
+            f"Group ensure failed for {path}: {stderr.strip() or stdout.strip()}"
+        )
     result = json.loads(stdout.strip())
     print(f"  group '{path}': uuid {result['uuid']}")
     return str(result["uuid"])
