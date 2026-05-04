@@ -121,9 +121,15 @@ def _ensure_group(db_name: str, path: str) -> str:
 # Manifest "kind" values mirror RecordKind (the read-side enum returned by
 # record.kind()). DT4's createRecordWith expects a different "type" enum on
 # the write side. Map the read-side strings to the write-side ones here.
+#
+# Empirically verified against DT4 4.2.2 via JXA probe (2026-05-04):
+# "rtf" is NOT a valid create-type — DT4 silently no-ops without raising.
+# The correct token for rich-text records on creation is "formatted note".
+# Records created this way are reported back by record.recordType() as
+# "formatted note" and by record.kind() as "Formatted Note" (Title Case).
 _KIND_TO_DT4_TYPE = {
     "PDF": "PDF document",
-    "rtf": "rtf",
+    "rtf": "formatted note",
     "markdown": "markdown",
     "txt": "text",
     "webarchive": "webarchive",
