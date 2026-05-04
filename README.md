@@ -87,6 +87,8 @@ Examples of natural prompts and the MCP tool each one triggers. All examples ass
   → `bulk_apply` (batch dry-run + per-record selective apply)
 - *"Which databases are open in DT?"*
   → `list_databases` (read-only, 5-min cache)
+- *"Dammi una panoramica di tutte le bollette del 2025 raggruppate per mese e tag"*
+  → `summarize_topic` (retrieval + server-side clustering by date and tags)
 
 Write tools (`file_document`, `bulk_apply`) are **dry-run by default**: the first call always returns a preview. Apply requires an explicit `confirm_token`. The returned `audit_id` enables selective `undo` via the CLI.
 

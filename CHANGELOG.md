@@ -5,6 +5,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
+### Added (summarize_topic)
+
+- New read-only MCP tool **`summarize_topic`** that retrieves records related
+  to a topic and groups them server-side by user-selected dimensions:
+  `date`, `tags`, `kind`, `location`. Default `cluster_by = ["date", "tags"]`.
+- Adaptive date granularity: year-only labels for ranges > 24 months, year-month
+  otherwise. Reverse-chronological cluster ordering.
+- Bounded output (configurable): default 50 records retrieved, 10 clusters per
+  dimension, 10 records per cluster. All bounds adjustable via `max_records`,
+  `max_clusters`, `max_per_cluster`.
+- Retrieval reuses the `ask_database` path: vector if `ISTEFOX_RAG_ENABLED=1`,
+  BM25 fallback otherwise. BM25 mode synthesizes rank-based scores so within-
+  cluster ordering remains meaningful.
+- Empty clusters are omitted from the response (no `count: 0` placeholder).
+- See [`docs/superpowers/specs/2026-05-03-summarize-topic-design.md`](docs/superpowers/specs/2026-05-03-summarize-topic-design.md)
+  for the full design.
+
 ### Added (drift detection 3-state)
 
 - `undo` of `file_document` now classifies drift into three states instead of
