@@ -4,6 +4,12 @@
     "name": "fixtures-dt-mcp",
     "uuid_placeholder": "FIXTURE-DB-0001-AAAA-AAAAAAAAAAAA"
   },
+  "system_databases": [
+    {
+      "name": "Inbox",
+      "uuid_placeholder": "FIXTURE-DB-SYSINBOX-AAAAAAAAAAAA"
+    }
+  ],
   "groups": [
     {"path": "/Inbox", "uuid_placeholder": "FIXTURE-GRP-INBOX-0000-AAAAAAAAAAAA"},
     {"path": "/Archive", "uuid_placeholder": "FIXTURE-GRP-ARCHIVE-00-AAAAAAAAAAAA"},
