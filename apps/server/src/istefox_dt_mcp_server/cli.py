@@ -390,7 +390,11 @@ def record_cassette(
     manifest = load_manifest()
 
     async def run_one(tool_name: str, args: dict[str, Any] | None) -> None:
-        deps = build_default_deps()
+        # Disable the cache so each capture round-trips through JXA. The
+        # 5min TTL on list_databases would otherwise short-circuit the
+        # call on consecutive runs and the recorder shim would see no
+        # traffic ("captured nothing").
+        deps = build_default_deps(cache_enabled=False)
         try:
             out_path = await _record(
                 tool=tool_name,
