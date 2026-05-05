@@ -113,9 +113,9 @@ The connector is designed **privacy-first** and **local-only**:
 
 | Version | What | References |
 |---|---|---|
-| **0.1.0** (this release, May 2026) | 6 MCP tools, audit + undo, `.mcpb` bundle, BM25-only retrieval by default | — |
-| **0.2.0** (Q3 2026) | RAG benchmark cross-corpus + flip default model, 3-state drift detection | [ADR-008](docs/adr/0008-embedding-model-selection.md) |
-| **0.3.0+** (Q4 2026) | HTTP transport + OAuth multi-device, additional tools (`summarize_topic`, `create_smart_rule`) | [ADR-004](docs/adr/0004-mvp-tool-scope.md) |
+| **0.1.0** (May 2026) | 6 MCP tools, audit + undo, `.mcpb` bundle, BM25-only retrieval by default | — |
+| **0.2.0** (in progress) | 7th tool `summarize_topic`, 3-state drift detection on `file_document` undo, real-data VCR cassettes from a fixture DT4 DB, RAG benchmark cross-corpus + flip default model | [ADR-005](docs/adr/0005-test-strategy-4-tier.md), [ADR-008](docs/adr/0008-embedding-model-selection.md) |
+| **0.3.0+** (Q4 2026) | HTTP transport + OAuth multi-device, `create_smart_rule`, per-op drift detection on `bulk_apply` undo | [ADR-004](docs/adr/0004-mvp-tool-scope.md) |
 
 Full backlog in [`handoff.md`](handoff.md).
 
@@ -137,7 +137,9 @@ For anything not listed: `uv run istefox-dt-mcp doctor` produces a full diagnost
 
 ## Status
 
-**0.1.0 first public release**: 6 MCP tools end-to-end, validated in Claude Desktop with real data. **163 unit + contract tests** green. `.mcpb` bundle distributable. Audit log + selective undo working. CI on Ubuntu (lint + mypy + unit + contract) and macOS-14 (import + bundle smoke + nightly).
+**0.1.0 first public release** (May 2026): 6 MCP tools end-to-end, validated in Claude Desktop with real data. `.mcpb` bundle distributable. Audit log + selective undo working. CI on Ubuntu (lint + mypy + unit + contract) and macOS-14 (import + bundle smoke + nightly).
+
+**0.2.0 in progress on `main`** (unreleased): `summarize_topic` 7th tool, 3-state drift on `file_document` undo, contract cassettes regenerated from a live DT4 fixture DB via the new `record-cassette` CLI. **210 unit + contract tests** green.
 
 ---
 
@@ -145,7 +147,7 @@ For anything not listed: `uv run istefox-dt-mcp doctor` produces a full diagnost
 
 A DEVONthink 4 connector for MCP that goes beyond a 1:1 wrapper of the scripting dictionary.
 
-**The six tools:**
+**The seven tools:**
 
 | Tool | Type | Notes |
 |---|---|---|
@@ -153,12 +155,13 @@ A DEVONthink 4 connector for MCP that goes beyond a 1:1 wrapper of the scripting
 | `search` | read | BM25 (default) + optional vector hybrid (RRF) when RAG is enabled |
 | `find_related` | read | Wraps DT's native See Also / Compare |
 | `ask_database` | read | BM25 + synthesis (default) + optional vector retrieval |
+| `summarize_topic` | read | Retrieval + server-side clustering by date/tags/kind/location *(0.2.0)* |
 | `file_document` | write | `dry_run` by default + preview-then-apply + selective undo |
 | `bulk_apply` | write | Batch ops with `dry_run` + per-op outcomes |
 
 The two write tools follow the preview-then-apply pattern: calling them with `dry_run=true` returns a preview plus a `preview_token` (the audit_id of the dry-run); a second call with `dry_run=false` plus `confirm_token=<preview_token>` actually applies the change. The returned `audit_id` enables selective `undo` via the CLI.
 
-Out of MVP scope (post-0.1.0): `summarize_topic`, `create_smart_rule` — see [ADR-004](docs/adr/0004-mvp-tool-scope.md).
+Still on the post-MVP list: `create_smart_rule` — see [ADR-004](docs/adr/0004-mvp-tool-scope.md).
 
 ---
 
@@ -193,8 +196,8 @@ Minimum DT version: **DEVONthink 4.0**. DT3 is not supported — see [ADR-007](d
 │   ├── adapter/     JXA bridge + cache + errors + JXA scripts
 │   └── schemas/     Shared Pydantic v2 models (common, tools, audit, errors)
 ├── tests/
-│   ├── unit/        Unit tests (157 tests)
-│   ├── contract/    VCR-style replay against captured JXA outputs (6 tests)
+│   ├── unit/        Unit tests (202 tests)
+│   ├── contract/    VCR-style replay against real DT4 captures (8 tests)
 │   ├── integration/ Real-DT smoke + latency benchmark (7 tests, opt-in)
 │   └── benchmark/   Micro-benchmarks (opt-in)
 ├── docs/
@@ -266,9 +269,10 @@ uv run istefox-dt-mcp doctor       # health check (requires DT running)
 uv run istefox-dt-mcp serve        # stdio server (for Claude Desktop)
 uv run istefox-dt-mcp audit list --recent 5   # last 5 audit entries
 
-# VCR cassette recording (see docs/development/cassette-recording.md)
-uv run istefox-dt-mcp record-cassette --tool search
-uv run istefox-dt-mcp record-cassette --all
+# VCR cassette recording (developer-only, requires DT4 + fixtures-dt-mcp DB)
+# See docs/development/cassette-recording.md
+uv run istefox-dt-mcp record-cassette --tool search_bm25
+uv run istefox-dt-mcp record-cassette --all   # auto-resets DB to manifest baseline first
 ```
 
 ---

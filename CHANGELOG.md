@@ -63,15 +63,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 - Scope limited to `file_document` undo. `bulk_apply` undo is unchanged
   (deferred to 0.3.0+).
 
-### Planned for 0.2.0
+### Still planned for 0.2.0 (not yet landed)
 - RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default modello (ADR-008)
-- Drift detection 3-state ("no drift" / "already partially undone" / "hostile drift")
-  per ridurre il falso positivo che richiede `--force` quando il record e' gia'
-  allineato a `before_state`
 - HTTP transport + OAuth (multi-device) — ADR-006
-- `summarize_topic`, `create_smart_rule` tool aggiuntivi
-- Captures GIF (install + demo + architecture) per il README
-- Cassette VCR catturate da DT vivo (oggi sintetiche)
+- `create_smart_rule` tool (DEFERRED, issue #47, gap nello SDK DT4)
+- Per-op drift detection per `bulk_apply` undo (schema upgrade audit log)
 
 ---
 
