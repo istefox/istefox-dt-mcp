@@ -7,19 +7,19 @@
 ## Snapshot sessione corrente
 
 - **Data fine**: 2026-05-05 sera
-- **Branch**: `main` @ `4792529` (in sync con origin/main)
-- **Output principale**: milestone "cassette VCR real-data" CHIUSA con PR #60. 0.2.0 entra in fase di stabilizzazione (3 item rimanenti, tutti opzionali/lunghi).
+- **Branch**: `main` @ `14883d6` (in sync con origin/main)
+- **Output principale**: **v0.2.0 RILASCIATA** — GitHub Release + MCP Registry pubblicato. Milestone cassette VCR + summarize_topic + drift 3-state landed.
 
 ---
 
 ## Stato corrente del progetto
 
 ### Versione live
-- **GitHub Releases**: `v0.1.0` (2026-05-02, ancora attuale)
-- **MCP Registry**: `io.github.istefox/dt-mcp` v0.1.0
+- **GitHub Releases**: `v0.2.0` (2026-05-05) — bundle .mcpb 311 KB, sha256 `a6084cce...`
+- **MCP Registry**: `io.github.istefox/dt-mcp` v0.2.0 (registry mostra entrambe 0.1.0 + 0.2.0)
 - **Repo**: pubblico, MIT, solo `istefox` come contributor
 
-### 0.2.0 in corso — landed in main
+### 0.2.0 — landed e rilasciata
 
 PR mergiate da inizio 0.2.0 (ordine cronologico):
 
@@ -34,6 +34,7 @@ PR mergiate da inizio 0.2.0 (ordine cronologico):
 | #58 | fix sanitizer: trailing-slash path + UUID rewrite in reference_url |
 | #59 | fix sanitizer: real_uuid_map per riscrivere argv + stdout text-level |
 | #60 | feat(cassette-vcr): cassette reali da fixtures-dt-mcp + auto-reset recording + invariant relax + assertion rewrite |
+| #61 | chore: release v0.2.0 (version bump + CHANGELOG dated) |
 
 ### Test status
 - 202 unit + 8 contract test pass (210 totali)
@@ -42,28 +43,26 @@ PR mergiate da inizio 0.2.0 (ordine cronologico):
 
 ---
 
-## 0.2.0 roadmap rimanente
+## Roadmap 0.3.0+
 
-Tutto opzionale o pesante. Nessuno è blocker per release.
+Tutti spostati da 0.2.0 in attesa di trigger esterni o cicli dedicati.
 
 | Item | Stato | Note |
 |---|---|---|
 | **RAG benchmark cross-corpus** | ⏸️ bloccato | Aspetta early adopter (3+ corpus diversi). Criterio per flippare default `bge-m3` (ADR-008). |
-| **HTTP transport + OAuth multi-device** | ⏸️ ADR-006 da finalizzare | Lavoro sostanziale (~2 settimane). Differibile a 0.3.0. |
+| **HTTP transport + OAuth multi-device** | ⏸️ ADR-006 da finalizzare | Lavoro sostanziale (~2 settimane). Probabile target 0.3.0. |
 | **`create_smart_rule`** | ⏸️ DEFERRED | Issue #47 — gap nello SDK DT4. Niente da fare lato nostro finché DT4 non aggiorna la dictionary. |
-| **Per-op drift detection per `bulk_apply` undo** | ⏸️ schema upgrade | Audit log schema bump. Differibile a 0.3.0. |
-
-**Possibilità per chiudere 0.2.0 ora**: rilasciare `v0.2.0` con quello che già c'è (summarize_topic + drift 3-state + cassette VCR real-data) e spostare gli item rimanenti a 0.3.0. Da decidere.
+| **Per-op drift detection per `bulk_apply` undo** | ⏸️ schema upgrade | Audit log schema bump. Probabile target 0.3.0. |
 
 ---
 
 ## Cose da fare prossima sessione
 
-Tre opzioni in ordine di pragmaticità:
+Opzioni in ordine di pragmaticità:
 
-1. **Tag e release `v0.2.0`** con quello che è in main. Prep release notes da CHANGELOG `[Unreleased]`, `gh workflow run release.yml`, publish-registry auto-triggera. Tempo: ~30 min. Vedi `release_workflow.md` in memory.
-2. **Annuncio progresso 0.2.0** via GitHub Discussion / issue / Reddit post (vedi `feedback_community_post_style.md` in memory per lo stile).
-3. **Picking up un item della roadmap** — il più trattabile è probabilmente l'HTTP transport, ma è ~2 settimane.
+1. **Annuncio v0.2.0** via Reddit / forum DEVONthink / HN (vedi `feedback_community_post_style.md` in memory per lo stile asciutto).
+2. **Bug fix gotcha publish-registry**: il workflow non auto-triggera sul tag pushato da release.yml (GH Actions GITHUB_TOKEN limit). Fix: usare PAT in release.yml. Workaround attuale: trigger manuale documentato in `release_workflow.md`.
+3. **Picking up un item della roadmap 0.3.0** — più trattabile probabilmente HTTP transport, ma è ~2 settimane.
 
 ---
 
@@ -71,17 +70,18 @@ Tre opzioni in ordine di pragmaticità:
 
 ```
 ~/Developer/Devonthink_MCP/
-├── main branch @ 4792529 (in sync con origin/main, working tree pulito)
+├── main branch @ 14883d6 (in sync con origin/main, working tree pulito)
+├── tag v0.2.0 pushato (2026-05-05)
 └── 0 stale branches (cleanup automatico post-merge)
 ```
 
 `git log --oneline -5`:
 ```
+14883d6 chore: release v0.2.0 (#61)
+7d78269 docs: refresh README + CHANGELOG + handoff post-cassette-VCR milestone
 4792529 feat(cassette-vcr): land real-data cassettes + auto-reset recording (#60)
 f64d86a docs: handoff.md aggiornato — cassette VCR real-data progress
 4dbc983 fix(sanitizer): rewrite real DT UUIDs in argv via real_uuid_map (#59)
-db04074 fix(sanitizer): match trailing-slash paths + rewrite UUIDs in reference_url (#58)
-f4b9b08 fix(sanitizer): split DB and record name maps to handle DT4 system Inbox (#57)
 ```
 
 ---
