@@ -5,6 +5,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
+### Planned for 0.3.0+
+- RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default model (ADR-008)
+- HTTP transport + OAuth (multi-device) — ADR-006
+- `create_smart_rule` tool (DEFERRED, issue #47, gap nello SDK DT4)
+- Per-op drift detection per `bulk_apply` undo (schema upgrade audit log)
+
+---
+
+## [0.2.0] — 2026-05-05 — `summarize_topic`, drift 3-state, real-data VCR cassettes
+
+Seconda release: settimo MCP tool, semantica undo migliorata, infrastruttura
+di test rifondata su catture reali. 7 PR feature + 12 PR cassette VCR
+(infrastructure + sanitizer hardening + real-data landing).
+
 ### Added (cassette VCR real-data — landed)
 
 - All 6 contract cassettes (`list_databases`, `search_bm25`, `find_related`, `get_record`, `apply_tag`, `move_record`) re-recorded against the live `fixtures-dt-mcp` DEVONthink 4 database. Replaces the original synthetic fixtures with real DT4 4.2.2 output.
@@ -62,12 +76,6 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
   `hostile_drift`.
 - Scope limited to `file_document` undo. `bulk_apply` undo is unchanged
   (deferred to 0.3.0+).
-
-### Still planned for 0.2.0 (not yet landed)
-- RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default modello (ADR-008)
-- HTTP transport + OAuth (multi-device) — ADR-006
-- `create_smart_rule` tool (DEFERRED, issue #47, gap nello SDK DT4)
-- Per-op drift detection per `bulk_apply` undo (schema upgrade audit log)
 
 ---
 
