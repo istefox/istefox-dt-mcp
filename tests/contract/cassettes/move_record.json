@@ -1,5 +1,7 @@
 {
-  "script": "move_record.js",
-  "argv": ["REC-MOVE-0001-AAAA-BBBBCCCCDDDD", "privato/archivio/2026"],
-  "stdout": "{\"uuid\":\"REC-MOVE-0001-AAAA-BBBBCCCCDDDD\",\"location\":\"/archivio/2026/\"}"
+  "script": "<inline>.js",
+  "argv": [
+    "FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA"
+  ],
+  "stdout": "{\"uuid\": \"FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA\", \"name\": \"Sample PDF Invoice 2025\", \"kind\": \"PDF document\", \"location\": \"/Inbox/\", \"path\": \"<UNKNOWN_PATH_1>\", \"reference_url\": \"x-devonthink-item://FIXTURE-REC-0001-AAAA-AAAAAAAAAAAA\", \"creation_date\": \"2026-05-04T20:47:31.000Z\", \"modification_date\": \"2026-05-04T20:47:31.000Z\", \"tags\": [\"invoices\", \"2025\", \"review\"], \"size_bytes\": 0, \"word_count\": 0}"
 }

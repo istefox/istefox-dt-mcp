@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
+### Added (cassette VCR real-data — landed)
+
+- All 6 contract cassettes (`list_databases`, `search_bm25`, `find_related`, `get_record`, `apply_tag`, `move_record`) re-recorded against the live `fixtures-dt-mcp` DEVONthink 4 database. Replaces the original synthetic fixtures with real DT4 4.2.2 output.
+- **Auto-reset on `--all`**: `record-cassette --all` now calls a new `reset_to_manifest_state` helper before capturing, restoring each manifest record to its declared `location` and `tags`. Makes the recording flow idempotent and reproducible across runs (without it, destructive ops from previous runs — `move_record`, `apply_tag` — would pollute fresh captures).
+- Contract test invariant `test_cassettes_have_no_unknown_placeholders` now allows `<UNKNOWN_PATH_n>` on the `Record.path` field only (filesystem path inside the `.dtBase2` bundle is per-machine and not deterministically mappable to a manifest placeholder). Other occurrences of `<UNKNOWN_NAME_*>` / `<UNKNOWN_PATH_*>` still fail the test.
+- Contract replay assertions in `tests/contract/test_jxa_replay.py` rewritten against real `fixtures-dt-mcp` data (10 records, score ranges from real DT BM25, `kind="PDF document"` per DT4's create-side type token).
+
 ### Added (cassette VCR real-data infrastructure)
 
 - New **`istefox-dt-mcp record-cassette`** CLI subcommand for capturing real JXA output from a live DEVONthink 4 instance into VCR cassettes. Flags: `--tool <name> [--input <json>]` to record a single tool call, or `--all` to record all tools with their default inputs. Output cassettes stored in `tests/contract/cassettes/` (configurable via `--cassettes-dir`).

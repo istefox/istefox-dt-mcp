@@ -384,3 +384,41 @@ def test_sanitize_rewrites_real_uuid_in_argv() -> None:
     assert out["argv"] == ["FIXTURE-REC-0001", "review"]
     assert "2BB80D07" not in out["stdout"]
     assert "2BB80D07" not in json.dumps(out["argv"])
+
+
+@pytest.mark.asyncio
+async def test_reset_to_manifest_state_returns_counters() -> None:
+    """The helper builds a JXA call from the manifest and returns the
+    parsed counter dict from the live DT response."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import reset_to_manifest_state
+
+    adapter = MagicMock()
+    adapter._jxa_inline = AsyncMock(
+        return_value={"moved": 1, "retagged": 1, "unchanged": 8, "missing": 0}
+    )
+
+    counters = await reset_to_manifest_state(_MANIFEST, adapter)
+
+    assert counters == {"moved": 1, "retagged": 1, "unchanged": 8, "missing": 0}
+    adapter._jxa_inline.assert_awaited_once()
+    # The injected JXA must reference the DB and the record name.
+    sent_code = adapter._jxa_inline.await_args.args[0]
+    assert "fixtures-dt-mcp" in sent_code
+    assert "Sample PDF Invoice 2025" in sent_code
+
+
+@pytest.mark.asyncio
+async def test_reset_to_manifest_state_raises_on_dt_not_running() -> None:
+    """When DT reports an error, the helper raises so the recording flow
+    aborts before issuing captures against a DB it can't reach."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from istefox_dt_mcp_server._record_cassette import reset_to_manifest_state
+
+    adapter = MagicMock()
+    adapter._jxa_inline = AsyncMock(return_value={"error": "DT_NOT_RUNNING"})
+
+    with pytest.raises(RuntimeError, match="DT_NOT_RUNNING"):
+        await reset_to_manifest_state(_MANIFEST, adapter)
