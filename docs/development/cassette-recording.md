@@ -50,6 +50,19 @@ This uses sane defaults from `DEFAULT_INPUTS` in
 `apps/server/src/istefox_dt_mcp_server/_record_cassette.py`. Adapt the
 defaults if your synthetic DB diverges.
 
+**Auto-reset before `--all`**: the command first calls
+`reset_to_manifest_state` so each capture starts from the manifest
+baseline. Without it, destructive ops from a previous run (e.g.
+`apply_tag` adds a `review` tag, `move_record` moves
+`Sample PDF Invoice 2025` to `/Archive`) would persist in the live DB
+and pollute subsequent captures.
+
+The reset prints a one-line summary, e.g.
+`↩ reset: moved=1 retagged=1 unchanged=8 missing=0`.
+
+For single-tool recording with `--tool <name>`, no auto-reset runs —
+re-execute `setup_test_database.py` first if you need a clean slate.
+
 ## Verification
 
 After recording:
@@ -68,7 +81,10 @@ Captures pass through `sanitize_cassette` before disk write:
 - Captured UUIDs → manifest `uuid_placeholder` (matched by record name)
 - Unknown record names → `<UNKNOWN_NAME_n>` (defense in depth — should
   never trigger if you're recording against `fixtures-dt-mcp`)
-- Unknown paths → `<UNKNOWN_PATH_n>` (same)
+- Unknown paths → `<UNKNOWN_PATH_n>` (same; allowed to remain on
+  `Record.path`, which is a per-machine filesystem path inside the
+  `.dtBase2` bundle and cannot be deterministically mapped to a manifest
+  placeholder — `<UNKNOWN_PATH_n>` is **forbidden** on any other field)
 
 If sanitization aborts (>50% UUIDs unknown), you're recording against
 the wrong DB. Verify `--databases` arg targets `fixtures-dt-mcp` only.

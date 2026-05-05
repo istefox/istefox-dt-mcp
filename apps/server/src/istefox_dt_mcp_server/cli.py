@@ -368,6 +368,7 @@ def record_cassette(
         SUPPORTED_TOOLS,
         SanitizationError,
         load_manifest,
+        reset_to_manifest_state,
     )
     from ._record_cassette import (
         record_cassette as _record,
@@ -411,7 +412,24 @@ def record_cassette(
             click.echo(f"❌ recording {tool_name} failed: {e}", err=True)
             sys.exit(1)
 
+    async def reset_state() -> None:
+        deps = build_default_deps(cache_enabled=False)
+        try:
+            counters = await reset_to_manifest_state(manifest, deps.adapter)
+            click.echo(
+                f"↩ reset: moved={counters.get('moved', 0)} "
+                f"retagged={counters.get('retagged', 0)} "
+                f"unchanged={counters.get('unchanged', 0)} "
+                f"missing={counters.get('missing', 0)}"
+            )
+        except Exception as e:
+            click.echo(f"❌ reset_to_manifest_state failed: {e}", err=True)
+            sys.exit(1)
+
     if record_all:
+        # Reset DB to manifest baseline so destructive ops from prior runs
+        # (move_record, apply_tag) don't pollute fresh captures.
+        asyncio.run(reset_state())
         for t in SUPPORTED_TOOLS:
             asyncio.run(run_one(t, None))
     else:

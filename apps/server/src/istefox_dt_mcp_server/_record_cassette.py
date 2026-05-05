@@ -307,6 +307,136 @@ DEFAULT_INPUTS: dict[str, dict[str, Any]] = {
 SUPPORTED_TOOLS: tuple[str, ...] = tuple(DEFAULT_INPUTS.keys())
 
 
+async def reset_to_manifest_state(
+    manifest: dict[str, Any],
+    adapter: Any,
+) -> dict[str, int]:
+    """Restore each manifest record to its declared location + tags.
+
+    Idempotent — safe to call before every ``record-cassette --all`` run.
+    Without this, destructive ops (move_record, apply_tag) executed in a
+    previous capture leave the DB in a drifted state, and subsequent
+    captures see polluted data (e.g. a record permanently in /Archive
+    instead of /Inbox, or carrying a stale "review" tag).
+
+    For each manifest record:
+      * looked up by name in the live DB,
+      * if its DT location differs from the manifest, moved back,
+      * if its DT tag set differs from the manifest, replaced.
+
+    Args:
+        manifest: parsed dt-database-manifest.json (with ``database`` and
+            ``records``). System databases are not reset.
+        adapter: live ``JXAAdapter`` (NOT mocked — uses ``_jxa_inline``).
+
+    Returns:
+        Counter dict ``{moved, retagged, unchanged, missing}``. Sum equals
+        ``len(manifest["records"])``.
+
+    Raises:
+        RuntimeError: if the JXA call returns an ``error`` field (e.g. DT
+            not running, fixtures DB closed).
+    """
+    db_name = manifest["database"]["name"]
+    records = [
+        {
+            "name": r["name"],
+            "location": r["location"],
+            "tags": r.get("tags", []),
+        }
+        for r in manifest.get("records", [])
+    ]
+
+    # Single-shot JXA: avoids N round-trips and keeps all walking/move
+    # logic in one place. Wrapped in an IIFE so we can use early returns.
+    code = f"""(function() {{
+  var dt = Application("DEVONthink");
+  if (!dt.running()) return JSON.stringify({{error: "DT_NOT_RUNNING"}});
+  var dbName = {json.dumps(db_name)};
+  var records = {json.dumps(records)};
+  var dbs = dt.databases().filter(function(d) {{ return d.name() === dbName; }});
+  if (dbs.length === 0) return JSON.stringify({{error: "DB_NOT_FOUND", db: dbName}});
+  var db = dbs[0];
+  var counters = {{moved: 0, retagged: 0, unchanged: 0, missing: 0}};
+
+  function safeName(r) {{ try {{ return r.name(); }} catch (e) {{ return null; }} }}
+  function safeKind(r) {{ try {{ return String(r.recordType() || ""); }} catch (e) {{ return ""; }} }}
+
+  function findRecord(name) {{
+    var hits = db.contents().filter(function(r) {{ return safeName(r) === name; }});
+    return hits.length > 0 ? hits[0] : null;
+  }}
+
+  function findGroup(path) {{
+    var parts = path.split("/").filter(function(p) {{ return p.length > 0; }});
+    var g = db.root();
+    for (var i = 0; i < parts.length; i++) {{
+      var p = parts[i];
+      var subs = g.children().filter(function(c) {{
+        return safeName(c) === p && safeKind(c) === "group";
+      }});
+      if (subs.length === 0) return null;
+      g = subs[0];
+    }}
+    return g;
+  }}
+
+  function arraysEqual(a, b) {{
+    if (a.length !== b.length) return false;
+    var sa = a.slice().sort();
+    var sb = b.slice().sort();
+    for (var i = 0; i < sa.length; i++) {{
+      if (sa[i] !== sb[i]) return false;
+    }}
+    return true;
+  }}
+
+  for (var i = 0; i < records.length; i++) {{
+    var rec = records[i];
+    var target = findRecord(rec.name);
+    if (!target) {{ counters.missing++; continue; }}
+    var modified = false;
+
+    // Location: DT may report with trailing slash; compare normalized.
+    var currentLoc = String(target.location() || "").replace(/\\/$/, "");
+    var expectedLoc = rec.location.replace(/\\/$/, "");
+    if (currentLoc !== expectedLoc) {{
+      var dest = findGroup(rec.location);
+      if (dest) {{
+        try {{ dt.move({{record: target, to: dest}}); counters.moved++; modified = true; }} catch (e) {{}}
+      }}
+    }}
+
+    var currentTags = (target.tags() || []).slice();
+    var expectedTags = rec.tags.slice();
+    if (!arraysEqual(currentTags, expectedTags)) {{
+      try {{ target.tags = expectedTags; counters.retagged++; modified = true; }} catch (e) {{}}
+    }}
+
+    if (!modified) counters.unchanged++;
+  }}
+
+  return JSON.stringify(counters);
+}})();"""
+
+    raw = await adapter._jxa_inline(code)
+    parsed = raw if isinstance(raw, dict) else json.loads(raw)
+    if "error" in parsed:
+        raise RuntimeError(
+            f"reset_to_manifest_state failed: {parsed['error']}"
+            + (f" (db={parsed.get('db')})" if parsed.get("db") else "")
+        )
+    log.info(
+        "manifest_reset",
+        db=db_name,
+        moved=parsed.get("moved", 0),
+        retagged=parsed.get("retagged", 0),
+        unchanged=parsed.get("unchanged", 0),
+        missing=parsed.get("missing", 0),
+    )
+    return parsed
+
+
 async def _resolve_placeholder_uuids(
     args: dict[str, Any],
     manifest: dict[str, Any],
