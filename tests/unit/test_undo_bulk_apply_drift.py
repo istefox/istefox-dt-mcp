@@ -20,15 +20,19 @@ def _record(
     tags: list[str] | None = None,
 ) -> Record:
     return Record(
-        uuid=uuid, name=f"r-{uuid}", kind=RecordKind.PDF,
-        location=location, reference_url=f"x-d://{uuid}",
-        creation_date=datetime.now(), modification_date=datetime.now(),
+        uuid=uuid,
+        name=f"r-{uuid}",
+        kind=RecordKind.PDF,
+        location=location,
+        reference_url=f"x-d://{uuid}",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
         tags=tags or [],
     )
 
 
 def _audit_bulk_apply(
-    deps: "Deps",
+    deps: Deps,
     *,
     applied_ops: list[dict],
     per_op_snapshots: dict[str, dict] | None = None,
@@ -68,7 +72,7 @@ async def test_no_drift_per_op_reverts_add_tag(deps):
         per_op_snapshots={
             "0": {
                 "before": {"location": "/Inbox", "tags": []},
-                "after":  {"location": "/Inbox", "tags": ["x"]},
+                "after": {"location": "/Inbox", "tags": ["x"]},
             }
         },
     )
@@ -96,7 +100,7 @@ async def test_already_reverted_per_op_skips(deps):
         per_op_snapshots={
             "0": {
                 "before": {"location": "/Inbox", "tags": []},
-                "after":  {"location": "/Inbox", "tags": ["x"]},
+                "after": {"location": "/Inbox", "tags": ["x"]},
             }
         },
     )
@@ -126,7 +130,7 @@ async def test_hostile_drift_per_op_skips_without_force(deps):
         per_op_snapshots={
             "0": {
                 "before": {"location": "/Inbox", "tags": []},
-                "after":  {"location": "/Inbox", "tags": ["x"]},
+                "after": {"location": "/Inbox", "tags": ["x"]},
             }
         },
     )
@@ -156,7 +160,7 @@ async def test_hostile_drift_per_op_reverts_with_force(deps):
         per_op_snapshots={
             "0": {
                 "before": {"location": "/Inbox", "tags": []},
-                "after":  {"location": "/Inbox", "tags": ["x"]},
+                "after": {"location": "/Inbox", "tags": ["x"]},
             }
         },
     )
@@ -181,16 +185,26 @@ async def test_mixed_batch_drift_states(deps):
         deps,
         applied_ops=[
             {"uuid": "u1", "op": "add_tag", "payload": {"tag": "a"}},  # no_drift
-            {"uuid": "u2", "op": "add_tag", "payload": {"tag": "b"}},  # already_reverted
+            {
+                "uuid": "u2",
+                "op": "add_tag",
+                "payload": {"tag": "b"},
+            },  # already_reverted
             {"uuid": "u3", "op": "add_tag", "payload": {"tag": "c"}},  # hostile_drift
         ],
         per_op_snapshots={
-            "0": {"before": {"location": "/", "tags": []},
-                  "after":  {"location": "/", "tags": ["a"]}},
-            "1": {"before": {"location": "/", "tags": []},
-                  "after":  {"location": "/", "tags": ["b"]}},
-            "2": {"before": {"location": "/", "tags": []},
-                  "after":  {"location": "/", "tags": ["c"]}},
+            "0": {
+                "before": {"location": "/", "tags": []},
+                "after": {"location": "/", "tags": ["a"]},
+            },
+            "1": {
+                "before": {"location": "/", "tags": []},
+                "after": {"location": "/", "tags": ["b"]},
+            },
+            "2": {
+                "before": {"location": "/", "tags": []},
+                "after": {"location": "/", "tags": ["c"]},
+            },
         },
     )
 
@@ -226,7 +240,9 @@ async def test_legacy_audit_no_per_op_snapshots(deps):
     )
     deps.adapter.remove_tag = AsyncMock(return_value=None)
     # get_record should NOT be called in the legacy branch
-    deps.adapter.get_record = AsyncMock(side_effect=AssertionError("must not be called"))
+    deps.adapter.get_record = AsyncMock(
+        side_effect=AssertionError("must not be called")
+    )
 
     result = await undo_audit(deps, audit_id, dry_run=False)
 
@@ -248,8 +264,10 @@ async def test_per_op_missing_after_falls_back_for_that_op_only(deps):
             {"uuid": "u2", "op": "add_tag", "payload": {"tag": "b"}},
         ],
         per_op_snapshots={
-            "0": {"before": {"location": "/", "tags": []},
-                  "after":  {"location": "/", "tags": ["a"]}},
+            "0": {
+                "before": {"location": "/", "tags": []},
+                "after": {"location": "/", "tags": ["a"]},
+            },
             "1": {"before": {"location": "/", "tags": []}},  # no `after`
         },
     )
@@ -273,11 +291,13 @@ async def test_no_drift_per_op_reverts_move(deps):
     """move op, current location matches `after` (post-move): revert moves back."""
     audit_id = _audit_bulk_apply(
         deps,
-        applied_ops=[{"uuid": "u1", "op": "move", "payload": {"destination": "/Archive"}}],
+        applied_ops=[
+            {"uuid": "u1", "op": "move", "payload": {"destination": "/Archive"}}
+        ],
         per_op_snapshots={
             "0": {
-                "before": {"location": "/Inbox",   "tags": []},
-                "after":  {"location": "/Archive", "tags": []},
+                "before": {"location": "/Inbox", "tags": []},
+                "after": {"location": "/Archive", "tags": []},
             }
         },
         pre_move_snapshots={"u1": "/Inbox"},  # required for inverse op
@@ -304,7 +324,7 @@ async def test_no_drift_per_op_reverts_remove_tag(deps):
         per_op_snapshots={
             "0": {
                 "before": {"location": "/", "tags": ["x"]},
-                "after":  {"location": "/", "tags": []},
+                "after": {"location": "/", "tags": []},
             }
         },
     )

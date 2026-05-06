@@ -389,9 +389,7 @@ async def _undo_bulk_apply(
 
     # Detect whether this audit entry has per-op snapshots (new format)
     # or only the legacy {applied, pre_move_snapshots} shape.
-    per_op_snapshots: dict[str, dict[str, Any]] = (
-        after.get("per_op_snapshots") or {}
-    )
+    per_op_snapshots: dict[str, dict[str, Any]] = after.get("per_op_snapshots") or {}
     has_drift_detection = bool(per_op_snapshots)
 
     drift_per_op: list[dict[str, Any]] = []
@@ -421,7 +419,9 @@ async def _undo_bulk_apply(
             original_location = snapshots.get(uuid)
             if original_location:
                 inverse_op = {
-                    "uuid": uuid, "op": "move", "destination": original_location,
+                    "uuid": uuid,
+                    "op": "move",
+                    "destination": original_location,
                 }
             else:
                 skipped.append({"uuid": uuid, "reason": "no pre-move snapshot"})
@@ -438,38 +438,48 @@ async def _undo_bulk_apply(
             snap = per_op_snapshots.get(str(orig_idx))
             if snap is None or "after" not in snap:
                 # Missing per-op snapshot → fall back to legacy (no drift check)
-                drift_per_op.append({
-                    "index": orig_idx, "uuid": uuid,
-                    "drift_state": "unknown",
-                    "reason": "no per-op snapshot",
-                })
+                drift_per_op.append(
+                    {
+                        "index": orig_idx,
+                        "uuid": uuid,
+                        "drift_state": "unknown",
+                        "reason": "no per-op snapshot",
+                    }
+                )
                 inverse_plan.append(inverse_op)
                 continue
 
             try:
                 current = await deps.adapter.get_record(uuid)
             except AdapterError:
-                drift_per_op.append({
-                    "index": orig_idx, "uuid": uuid,
-                    "drift_state": "unknown",
-                    "reason": "record not retrievable",
-                })
+                drift_per_op.append(
+                    {
+                        "index": orig_idx,
+                        "uuid": uuid,
+                        "drift_state": "unknown",
+                        "reason": "record not retrievable",
+                    }
+                )
                 skipped.append({"uuid": uuid, "reason": "record not retrievable"})
                 continue
 
             drift_state = compute_drift_state(current, snap["before"], snap["after"])
             entry_dict: dict[str, Any] = {
-                "index": orig_idx, "uuid": uuid, "drift_state": drift_state,
+                "index": orig_idx,
+                "uuid": uuid,
+                "drift_state": drift_state,
             }
 
             if drift_state == "already_reverted":
                 entry_dict["reason"] = "already in pre-op state"
                 drift_per_op.append(entry_dict)
-                skipped.append({
-                    "uuid": uuid,
-                    "reason": "already_reverted",
-                    "index": orig_idx,
-                })
+                skipped.append(
+                    {
+                        "uuid": uuid,
+                        "reason": "already_reverted",
+                        "index": orig_idx,
+                    }
+                )
                 continue
 
             if drift_state == "hostile_drift":
@@ -478,16 +488,16 @@ async def _undo_bulk_apply(
                         current, snap["after"]
                     )
                     drift_per_op.append(entry_dict)
-                    skipped.append({
-                        "uuid": uuid,
-                        "reason": "hostile_drift",
-                        "index": orig_idx,
-                    })
+                    skipped.append(
+                        {
+                            "uuid": uuid,
+                            "reason": "hostile_drift",
+                            "index": orig_idx,
+                        }
+                    )
                     continue
                 # force=True: surface drift but proceed
-                entry_dict["drift_details"] = _bulk_diff_details(
-                    current, snap["after"]
-                )
+                entry_dict["drift_details"] = _bulk_diff_details(current, snap["after"])
                 entry_dict["force_applied"] = True
 
             drift_per_op.append(entry_dict)
@@ -496,9 +506,7 @@ async def _undo_bulk_apply(
             # Legacy entry (no per_op_snapshots): keep current behavior
             inverse_plan.append(inverse_op)
 
-    drift_detected = any(
-        d.get("drift_state") == "hostile_drift" for d in drift_per_op
-    )
+    drift_detected = any(d.get("drift_state") == "hostile_drift" for d in drift_per_op)
 
     if dry_run:
         return {
