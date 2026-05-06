@@ -55,6 +55,9 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         # in this batch. Populated lazily during the apply phase and
         # persisted in before_state so undo can revert moves precisely.
         pre_move_snapshots: dict[str, str] = {}
+        # Capture per-op {before, after} record snapshots so undo can
+        # run 3-state drift detection on each op independently.
+        per_op_snapshots: dict[str, dict[str, Any]] = {}
 
         async def op() -> BulkApplyResult:
             outcomes: list[BulkOpOutcome] = []
@@ -93,33 +96,34 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                         break
                     continue
 
-                # For move ops, capture the pre-move location so undo
-                # can revert to it. add_tag/remove_tag don't need a
-                # snapshot — the inverse op is mechanical (the tag
-                # name from the payload).
-                if bop.op == "move":
-                    try:
-                        snapshot_record = await deps.adapter.get_record(bop.record_uuid)
-                        pre_move_snapshots[bop.record_uuid] = snapshot_record.location
-                    except AdapterError:
-                        # If we can't snapshot, abort this op safely —
-                        # applying without a snapshot would leave us
-                        # unable to undo.
-                        outcomes.append(
-                            BulkOpOutcome(
-                                index=idx,
-                                record_uuid=bop.record_uuid,
-                                op=bop.op,
-                                status="failed",
-                                error_code="RECORD_NOT_FOUND",
-                                error_message="cannot snapshot before move",
-                            )
+                # Pre-snapshot for drift detection (every op type).
+                # For move ops we'll reuse this as pre_move_snapshots,
+                # avoiding a double get_record. add_tag/remove_tag also
+                # capture before-state so per-op drift detection works.
+                try:
+                    rec_before = await deps.adapter.get_record(bop.record_uuid)
+                except AdapterError as e:
+                    # If we can't snapshot, abort this op safely —
+                    # applying without a snapshot would leave us
+                    # unable to undo.
+                    outcomes.append(
+                        BulkOpOutcome(
+                            index=idx,
+                            record_uuid=bop.record_uuid,
+                            op=bop.op,
+                            status="failed",
+                            error_code=e.code.value,
+                            error_message=f"pre-snapshot failed for {bop.record_uuid}: {e}",
                         )
-                        if failed_index is None:
-                            failed_index = idx
-                        if input.stop_on_first_error:
-                            break
-                        continue
+                    )
+                    if failed_index is None:
+                        failed_index = idx
+                    if input.stop_on_first_error:
+                        break
+                    continue
+
+                if bop.op == "move":
+                    pre_move_snapshots[bop.record_uuid] = rec_before.location
 
                 try:
                     await _dispatch_op(deps, bop)
@@ -149,6 +153,26 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                     )
                 )
                 applied += 1
+
+                per_op_entry: dict[str, dict[str, Any]] = {
+                    "before": {
+                        "location": rec_before.location,
+                        "tags": list(rec_before.tags),
+                    },
+                }
+                # Post-snapshot: best-effort. If the refetch fails (record
+                # deleted between dispatch and refetch — rare), the op is
+                # still recorded as applied but undo falls back to legacy
+                # behavior for THIS op only.
+                try:
+                    rec_after = await deps.adapter.get_record(bop.record_uuid)
+                    per_op_entry["after"] = {
+                        "location": rec_after.location,
+                        "tags": list(rec_after.tags),
+                    }
+                except AdapterError:
+                    pass  # `after` left unset — undo handles missing key
+                per_op_snapshots[str(idx)] = per_op_entry
 
             return BulkApplyResult(
                 operations_total=len(input.operations),
@@ -205,6 +229,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                         "applied": applied_ops,
                         "operations_applied": result.data.operations_applied,
                         "pre_move_snapshots": pre_move_snapshots,
+                        "per_op_snapshots": per_op_snapshots,
                     },
                 )
         return result

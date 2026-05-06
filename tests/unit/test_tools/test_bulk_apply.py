@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 from istefox_dt_mcp_adapter.errors import RecordNotFoundError
+from istefox_dt_mcp_schemas.common import Record, RecordKind
 from istefox_dt_mcp_schemas.tools import (
     BulkApplyInput,
     BulkApplyOperation,
@@ -14,8 +17,6 @@ from istefox_dt_mcp_schemas.tools import (
 from istefox_dt_mcp_server.tools.bulk_apply import register
 
 if TYPE_CHECKING:
-    from unittest.mock import AsyncMock
-
     from istefox_dt_mcp_server.deps import Deps
 
 
@@ -36,6 +37,22 @@ def _register_and_get_callable(deps: Deps):
 
 def _op(uuid: str, op: str, **payload: str) -> BulkApplyOperation:
     return BulkApplyOperation(record_uuid=uuid, op=op, payload=payload)
+
+
+def _default_record(uuid: str = "u") -> Record:
+    """Default Record returned by mock_adapter.get_record in tests that
+    exercise the apply path. Has minimal shape — tests that care about
+    specific location/tags override the mock per-test."""
+    return Record(
+        uuid=uuid,
+        name=f"r-{uuid}",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url=f"x-d://{uuid}",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=[],
+    )
 
 
 async def _obtain_token(fn, ops: list[BulkApplyOperation]) -> str:
@@ -105,6 +122,7 @@ async def test_dry_run_flags_missing_payload(deps: Deps) -> None:
 
 @pytest.mark.asyncio
 async def test_apply_dispatches_to_adapter(deps: Deps, mock_adapter: AsyncMock) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     fn = _register_and_get_callable(deps)
     ops = [
         _op("u1", "add_tag", tag="alpha"),
@@ -128,6 +146,7 @@ async def test_apply_dispatches_to_adapter(deps: Deps, mock_adapter: AsyncMock) 
 async def test_apply_stop_on_first_error_halts(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     # Second op fails — the third op must not run
     mock_adapter.apply_tag.side_effect = [
         None,  # u1 ok
@@ -160,6 +179,7 @@ async def test_apply_stop_on_first_error_halts(
 
 @pytest.mark.asyncio
 async def test_apply_continue_on_error(deps: Deps, mock_adapter: AsyncMock) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     mock_adapter.apply_tag.side_effect = [
         None,  # u1 ok
         RecordNotFoundError("u2"),  # u2 fails
@@ -240,6 +260,7 @@ async def test_apply_without_confirm_token_is_rejected(
 async def test_apply_consumed_token_rejected_on_replay(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     fn = _register_and_get_callable(deps)
     ops = [_op("u1", "add_tag", tag="alpha")]
     token = await _obtain_token(fn, ops)
@@ -258,6 +279,7 @@ async def test_apply_with_other_tools_token_is_rejected(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
     """A file_document preview_token cannot be used to apply bulk_apply."""
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     foreign_id = deps.audit.append(
         tool_name="file_document",
         input_data={"dry_run": True, "record_uuid": "u"},
@@ -275,3 +297,122 @@ async def test_apply_with_other_tools_token_is_rejected(
     assert out.success is False
     assert out.error_code == "INVALID_PREVIEW_TOKEN"
     mock_adapter.apply_tag.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_apply_persists_per_op_before_snapshot(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """After applying an add_tag op, audit.after_state.per_op_snapshots[idx]
+    must contain a `before` block with the record's location + tags as
+    they were just before dispatch."""
+    mock_adapter.get_record = AsyncMock(
+        return_value=Record(
+            uuid="u1",
+            name="r1",
+            kind=RecordKind.PDF,
+            location="/Inbox",
+            reference_url="x-d://u1",
+            creation_date=datetime.now(),
+            modification_date=datetime.now(),
+            tags=["existing"],
+        )
+    )
+    mock_adapter.apply_tag = AsyncMock(return_value=None)
+
+    fn = _register_and_get_callable(deps)
+    ops = [_op("u1", "add_tag", tag="new")]
+    token = await _obtain_token(fn, ops)
+    result = await fn(
+        BulkApplyInput(operations=ops, dry_run=False, confirm_token=token)
+    )
+    assert result.success
+
+    entry = deps.audit.get(result.audit_id)
+    snaps = (entry.after_state or {}).get("per_op_snapshots") or {}
+    assert "0" in snaps, f"expected per_op_snapshots['0'], got keys: {list(snaps)}"
+    assert snaps["0"]["before"] == {"location": "/Inbox", "tags": ["existing"]}
+
+
+@pytest.mark.asyncio
+async def test_apply_persists_per_op_after_snapshot(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """After applying add_tag, per_op_snapshots[idx].after must reflect
+    the record's state post-dispatch (tag now in the list)."""
+    rec_before = Record(
+        uuid="u1",
+        name="r1",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url="x-d://u1",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=["existing"],
+    )
+    rec_after = Record(
+        uuid="u1",
+        name="r1",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url="x-d://u1",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=["existing", "new"],
+    )
+    mock_adapter.get_record = AsyncMock(side_effect=[rec_before, rec_after])
+    mock_adapter.apply_tag = AsyncMock(return_value=None)
+
+    fn = _register_and_get_callable(deps)
+    ops = [_op("u1", "add_tag", tag="new")]
+    token = await _obtain_token(fn, ops)
+    result = await fn(
+        BulkApplyInput(operations=ops, dry_run=False, confirm_token=token)
+    )
+    assert result.success
+
+    entry = deps.audit.get(result.audit_id)
+    snap = (entry.after_state or {}).get("per_op_snapshots", {}).get("0")
+    assert snap is not None
+    assert snap["after"] == {"location": "/Inbox", "tags": ["existing", "new"]}
+
+
+@pytest.mark.asyncio
+async def test_apply_handles_post_snapshot_failure(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """If the post-dispatch get_record raises, the op is still applied
+    but per_op_snapshots[idx] has only `before` (no `after`)."""
+    rec_before = Record(
+        uuid="u1",
+        name="r1",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url="x-d://u1",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=["existing"],
+    )
+    mock_adapter.get_record = AsyncMock(
+        side_effect=[
+            rec_before,
+            RecordNotFoundError("u1"),
+        ]
+    )
+    mock_adapter.apply_tag = AsyncMock(return_value=None)
+
+    fn = _register_and_get_callable(deps)
+    ops = [_op("u1", "add_tag", tag="new")]
+    token = await _obtain_token(fn, ops)
+    result = await fn(
+        BulkApplyInput(operations=ops, dry_run=False, confirm_token=token)
+    )
+    assert result.success
+    assert result.data.operations_applied == 1
+    assert result.data.outcomes[0].status == "applied"
+
+    entry = deps.audit.get(result.audit_id)
+    snap = (entry.after_state or {}).get("per_op_snapshots", {}).get("0")
+    assert snap is not None
+    assert "before" in snap
+    assert "after" not in snap

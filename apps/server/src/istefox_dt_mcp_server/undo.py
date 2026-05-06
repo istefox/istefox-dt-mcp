@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 import structlog
+from istefox_dt_mcp_adapter.errors import AdapterError
 
 if TYPE_CHECKING:
     from istefox_dt_mcp_schemas.audit import AuditEntry
@@ -317,6 +318,30 @@ def _is_first_undo(current_location: str, input_data: dict[str, object]) -> bool
     return isinstance(hint, str) and hint == current_location
 
 
+def _bulk_diff_details(current: Record, after_snap: dict[str, Any]) -> dict[str, Any]:
+    """Same shape as the file_document path: report what diverged
+    between current state and the persisted `after` snapshot.
+
+    `after_snap` is the inner `snap["after"]` dict (with `location`
+    and `tags` keys), not the outer `{"before": ..., "after": ...}`
+    wrapper.
+    """
+    expected_loc = str(after_snap.get("location") or "")
+    expected_tags = sorted(after_snap.get("tags") or [])
+    cur_tags = sorted(current.tags)
+    details: dict[str, Any] = {}
+    if current.location != expected_loc:
+        details["location"] = {"expected": expected_loc, "current": current.location}
+    if cur_tags != expected_tags:
+        details["tags"] = {
+            "expected": expected_tags,
+            "current": cur_tags,
+            "added": sorted(set(cur_tags) - set(expected_tags)),
+            "removed": sorted(set(expected_tags) - set(cur_tags)),
+        }
+    return details
+
+
 async def _undo_bulk_apply(
     deps: Deps,
     entry: AuditEntry,
@@ -335,10 +360,17 @@ async def _undo_bulk_apply(
     Reverts in reverse order (LIFO) so that any local interaction
     between ops is undone in the opposite sequence.
 
-    `force` is currently a no-op for bulk undo (per-op drift detection
-    is post-MVP — the audit_after_state doesn't have per-op
-    after-snapshots). The flag is accepted for CLI symmetry with
-    file_document undo.
+    When per-op snapshots are present in the audit entry (entries
+    written after this feature landed), each op is evaluated
+    independently via ``compute_drift_state``:
+
+    - ``no_drift``         → reverted.
+    - ``already_reverted`` → skipped (``force`` has no effect).
+    - ``hostile_drift``    → skipped unless ``force=True``.
+
+    Legacy entries (no ``per_op_snapshots`` key) fall back to the
+    pre-feature behavior: every op is added to the inverse plan
+    without drift check.
     """
     audit_id_str = str(entry.audit_id)
     after = entry.after_state or {}
@@ -355,48 +387,136 @@ async def _undo_bulk_apply(
             "dry_run": dry_run,
         }
 
+    # Detect whether this audit entry has per-op snapshots (new format)
+    # or only the legacy {applied, pre_move_snapshots} shape.
+    per_op_snapshots: dict[str, dict[str, Any]] = after.get("per_op_snapshots") or {}
+    has_drift_detection = bool(per_op_snapshots)
+
+    drift_per_op: list[dict[str, Any]] = []
+
     # Compute inverse ops in LIFO order
     inverse_plan: list[dict[str, Any]] = []
-    skipped: list[dict[str, str]] = []
-    for op in reversed(applied):
+    skipped: list[dict[str, Any]] = []
+    indexed_applied = list(enumerate(applied))
+    for orig_idx, op in reversed(indexed_applied):
         uuid = op.get("uuid")
         op_type = op.get("op")
         payload = op.get("payload") or {}
         if not uuid or not op_type:
             continue
 
+        # Compute the inverse op (same logic as before)
+        inverse_op: dict[str, Any] | None = None
         if op_type == "add_tag":
             tag = payload.get("tag")
             if tag:
-                inverse_plan.append({"uuid": uuid, "op": "remove_tag", "tag": tag})
+                inverse_op = {"uuid": uuid, "op": "remove_tag", "tag": tag}
         elif op_type == "remove_tag":
             tag = payload.get("tag")
             if tag:
-                inverse_plan.append({"uuid": uuid, "op": "add_tag", "tag": tag})
+                inverse_op = {"uuid": uuid, "op": "add_tag", "tag": tag}
         elif op_type == "move":
             original_location = snapshots.get(uuid)
             if original_location:
-                inverse_plan.append(
-                    {
-                        "uuid": uuid,
-                        "op": "move",
-                        "destination": original_location,
-                    }
-                )
+                inverse_op = {
+                    "uuid": uuid,
+                    "op": "move",
+                    "destination": original_location,
+                }
             else:
-                # No snapshot → can't safely undo; skip with reason
                 skipped.append({"uuid": uuid, "reason": "no pre-move snapshot"})
+                continue
         else:
             skipped.append({"uuid": uuid, "reason": f"unknown op {op_type}"})
+            continue
+
+        if inverse_op is None:
+            continue
+
+        # Per-op drift evaluation (only when snapshots are available)
+        if has_drift_detection:
+            snap = per_op_snapshots.get(str(orig_idx))
+            if snap is None or "after" not in snap:
+                # Missing per-op snapshot → fall back to legacy (no drift check)
+                drift_per_op.append(
+                    {
+                        "index": orig_idx,
+                        "uuid": uuid,
+                        "drift_state": "unknown",
+                        "reason": "no per-op snapshot",
+                    }
+                )
+                inverse_plan.append(inverse_op)
+                continue
+
+            try:
+                current = await deps.adapter.get_record(uuid)
+            except AdapterError:
+                drift_per_op.append(
+                    {
+                        "index": orig_idx,
+                        "uuid": uuid,
+                        "drift_state": "unknown",
+                        "reason": "record not retrievable",
+                    }
+                )
+                skipped.append({"uuid": uuid, "reason": "record not retrievable"})
+                continue
+
+            drift_state = compute_drift_state(current, snap["before"], snap["after"])
+            entry_dict: dict[str, Any] = {
+                "index": orig_idx,
+                "uuid": uuid,
+                "drift_state": drift_state,
+            }
+
+            if drift_state == "already_reverted":
+                entry_dict["reason"] = "already in pre-op state"
+                drift_per_op.append(entry_dict)
+                skipped.append(
+                    {
+                        "uuid": uuid,
+                        "reason": "already_reverted",
+                        "index": orig_idx,
+                    }
+                )
+                continue
+
+            if drift_state == "hostile_drift":
+                if not force:
+                    entry_dict["drift_details"] = _bulk_diff_details(
+                        current, snap["after"]
+                    )
+                    drift_per_op.append(entry_dict)
+                    skipped.append(
+                        {
+                            "uuid": uuid,
+                            "reason": "hostile_drift",
+                            "index": orig_idx,
+                        }
+                    )
+                    continue
+                # force=True: surface drift but proceed
+                entry_dict["drift_details"] = _bulk_diff_details(current, snap["after"])
+                entry_dict["force_applied"] = True
+
+            drift_per_op.append(entry_dict)
+            inverse_plan.append(inverse_op)
+        else:
+            # Legacy entry (no per_op_snapshots): keep current behavior
+            inverse_plan.append(inverse_op)
+
+    drift_detected = any(d.get("drift_state") == "hostile_drift" for d in drift_per_op)
 
     if dry_run:
         return {
             "audit_id": audit_id_str,
             "tool_name": "bulk_apply",
             "reverted": False,
-            "drift_detected": False,
+            "drift_detected": drift_detected,
             "would_revert": inverse_plan,
             "skipped": skipped,
+            "drift_per_op": drift_per_op,
             "n_ops_to_revert": len(inverse_plan),
             "force_acknowledged": force,
             "dry_run": True,
@@ -429,6 +549,7 @@ async def _undo_bulk_apply(
         reverted=reverted_count,
         failed=len(failures),
         skipped=len(skipped),
+        drift_detected=drift_detected,
     )
     return {
         "audit_id": audit_id_str,
@@ -437,7 +558,8 @@ async def _undo_bulk_apply(
         "reverted_count": reverted_count,
         "failures": failures,
         "skipped": skipped,
-        "drift_detected": False,
+        "drift_per_op": drift_per_op,
+        "drift_detected": drift_detected,
         "dry_run": False,
         "message": (
             "ok"
