@@ -266,3 +266,55 @@ async def test_per_op_missing_after_falls_back_for_that_op_only(deps):
     states = {d["uuid"]: d["drift_state"] for d in result["drift_per_op"]}
     assert states["u1"] == "no_drift"
     assert states["u2"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_no_drift_per_op_reverts_move(deps):
+    """move op, current location matches `after` (post-move): revert moves back."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[{"uuid": "u1", "op": "move", "payload": {"destination": "/Archive"}}],
+        per_op_snapshots={
+            "0": {
+                "before": {"location": "/Inbox",   "tags": []},
+                "after":  {"location": "/Archive", "tags": []},
+            }
+        },
+        pre_move_snapshots={"u1": "/Inbox"},  # required for inverse op
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(uuid="u1", location="/Archive", tags=[])
+    )
+    deps.adapter.move_record = AsyncMock(return_value=None)
+
+    result = await undo_audit(deps, audit_id, dry_run=False)
+
+    assert result["reverted"] is True
+    assert result["reverted_count"] == 1
+    assert result["drift_per_op"][0]["drift_state"] == "no_drift"
+    deps.adapter.move_record.assert_awaited_once_with("u1", "/Inbox", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_no_drift_per_op_reverts_remove_tag(deps):
+    """remove_tag op, current matches `after` (tag absent): revert re-adds the tag."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[{"uuid": "u1", "op": "remove_tag", "payload": {"tag": "x"}}],
+        per_op_snapshots={
+            "0": {
+                "before": {"location": "/", "tags": ["x"]},
+                "after":  {"location": "/", "tags": []},
+            }
+        },
+    )
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(uuid="u1", location="/", tags=[])
+    )
+    deps.adapter.apply_tag = AsyncMock(return_value=None)
+
+    result = await undo_audit(deps, audit_id, dry_run=False)
+
+    assert result["reverted"] is True
+    assert result["reverted_count"] == 1
+    deps.adapter.apply_tag.assert_awaited_once_with("u1", "x", dry_run=False)
