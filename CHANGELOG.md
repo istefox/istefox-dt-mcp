@@ -5,11 +5,22 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [S
 
 ## [Unreleased]
 
+### Added
+- Per-op drift detection in `bulk_apply` undo (3-state classifier: `no_drift` / `already_reverted` / `hostile_drift`), mirroring the `file_document` undo pattern from 0.2.0.
+- New response field `drift_per_op: list[{index, uuid, drift_state, drift_details?}]` on `bulk_apply` undo for fine-grained reporting.
+- Audit log persists `after_state.per_op_snapshots` keyed by op index — `{before, after}` `{location, tags}` snapshots captured during apply.
+
+### Changed
+- `bulk_apply` apply phase now performs 2 extra `get_record` calls per op (pre + post snapshot). On a typical 50-op batch latency goes from ~5s to ~15s under the existing JXA worker pool — accepted cost for correct undo semantics.
+- `bulk_apply` undo response field `drift_detected` now reflects "any op had hostile_drift" instead of always `false`.
+
+### Notes
+- Audit entries written before this change lack `per_op_snapshots` and continue to work via legacy fallback (no per-op drift detection, identical to pre-0.3.0 behavior).
+
 ### Planned for 0.3.0+
 - RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default model (ADR-008)
 - HTTP transport + OAuth (multi-device) — ADR-006
 - `create_smart_rule` tool (DEFERRED, issue #47, gap nello SDK DT4)
-- Per-op drift detection per `bulk_apply` undo (schema upgrade audit log)
 
 ---
 
