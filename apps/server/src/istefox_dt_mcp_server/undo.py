@@ -318,6 +318,26 @@ def _is_first_undo(current_location: str, input_data: dict[str, object]) -> bool
     return isinstance(hint, str) and hint == current_location
 
 
+def _bulk_diff_details(current: Record, snap: dict[str, Any]) -> dict[str, Any]:
+    """Same shape as the file_document path: report what diverged
+    between current state and the persisted `after` snapshot."""
+    after = snap.get("after") or {}
+    expected_loc = str(after.get("location") or "")
+    expected_tags = sorted(after.get("tags") or [])
+    cur_tags = sorted(current.tags)
+    details: dict[str, Any] = {}
+    if current.location != expected_loc:
+        details["location"] = {"expected": expected_loc, "current": current.location}
+    if cur_tags != expected_tags:
+        details["tags"] = {
+            "expected": expected_tags,
+            "current": cur_tags,
+            "added": sorted(set(cur_tags) - set(expected_tags)),
+            "removed": sorted(set(expected_tags) - set(cur_tags)),
+        }
+    return details
+
+
 async def _undo_bulk_apply(
     deps: Deps,
     entry: AuditEntry,
@@ -358,7 +378,9 @@ async def _undo_bulk_apply(
 
     # Detect whether this audit entry has per-op snapshots (new format)
     # or only the legacy {applied, pre_move_snapshots} shape.
-    per_op_snapshots: dict[str, dict] = after.get("per_op_snapshots") or {}
+    per_op_snapshots: dict[str, dict[str, Any]] = (
+        after.get("per_op_snapshots") or {}
+    )
     has_drift_detection = bool(per_op_snapshots)
 
     drift_per_op: list[dict[str, Any]] = []
@@ -439,19 +461,36 @@ async def _undo_bulk_apply(
                 })
                 continue
 
-            # Task 6 will add hostile_drift handling here.
+            if drift_state == "hostile_drift":
+                if not force:
+                    entry_dict["drift_details"] = _bulk_diff_details(current, snap)
+                    drift_per_op.append(entry_dict)
+                    skipped.append({
+                        "uuid": uuid,
+                        "reason": "hostile_drift",
+                        "index": orig_idx,
+                    })
+                    continue
+                # force=True: surface drift but proceed
+                entry_dict["drift_details"] = _bulk_diff_details(current, snap)
+                entry_dict["force_applied"] = True
+
             drift_per_op.append(entry_dict)
             inverse_plan.append(inverse_op)
         else:
             # Legacy entry (no per_op_snapshots): keep current behavior
             inverse_plan.append(inverse_op)
 
+    drift_detected = any(
+        d.get("drift_state") == "hostile_drift" for d in drift_per_op
+    )
+
     if dry_run:
         return {
             "audit_id": audit_id_str,
             "tool_name": "bulk_apply",
             "reverted": False,
-            "drift_detected": False,  # updated in Task 6
+            "drift_detected": drift_detected,
             "would_revert": inverse_plan,
             "skipped": skipped,
             "drift_per_op": drift_per_op,
@@ -496,7 +535,7 @@ async def _undo_bulk_apply(
         "failures": failures,
         "skipped": skipped,
         "drift_per_op": drift_per_op,
-        "drift_detected": False,  # updated in Task 6
+        "drift_detected": drift_detected,
         "dry_run": False,
         "message": (
             "ok"
