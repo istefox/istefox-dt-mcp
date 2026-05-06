@@ -39,6 +39,22 @@ def _op(uuid: str, op: str, **payload: str) -> BulkApplyOperation:
     return BulkApplyOperation(record_uuid=uuid, op=op, payload=payload)
 
 
+def _default_record(uuid: str = "u") -> Record:
+    """Default Record returned by mock_adapter.get_record in tests that
+    exercise the apply path. Has minimal shape — tests that care about
+    specific location/tags override the mock per-test."""
+    return Record(
+        uuid=uuid,
+        name=f"r-{uuid}",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url=f"x-d://{uuid}",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=[],
+    )
+
+
 async def _obtain_token(fn, ops: list[BulkApplyOperation]) -> str:
     """Run a dry_run preview and return the preview_token."""
     preview = await fn(BulkApplyInput(operations=ops, dry_run=True))
@@ -106,6 +122,7 @@ async def test_dry_run_flags_missing_payload(deps: Deps) -> None:
 
 @pytest.mark.asyncio
 async def test_apply_dispatches_to_adapter(deps: Deps, mock_adapter: AsyncMock) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     fn = _register_and_get_callable(deps)
     ops = [
         _op("u1", "add_tag", tag="alpha"),
@@ -129,6 +146,7 @@ async def test_apply_dispatches_to_adapter(deps: Deps, mock_adapter: AsyncMock) 
 async def test_apply_stop_on_first_error_halts(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     # Second op fails — the third op must not run
     mock_adapter.apply_tag.side_effect = [
         None,  # u1 ok
@@ -161,6 +179,7 @@ async def test_apply_stop_on_first_error_halts(
 
 @pytest.mark.asyncio
 async def test_apply_continue_on_error(deps: Deps, mock_adapter: AsyncMock) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     mock_adapter.apply_tag.side_effect = [
         None,  # u1 ok
         RecordNotFoundError("u2"),  # u2 fails
@@ -241,6 +260,7 @@ async def test_apply_without_confirm_token_is_rejected(
 async def test_apply_consumed_token_rejected_on_replay(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     fn = _register_and_get_callable(deps)
     ops = [_op("u1", "add_tag", tag="alpha")]
     token = await _obtain_token(fn, ops)
@@ -259,6 +279,7 @@ async def test_apply_with_other_tools_token_is_rejected(
     deps: Deps, mock_adapter: AsyncMock
 ) -> None:
     """A file_document preview_token cannot be used to apply bulk_apply."""
+    mock_adapter.get_record = AsyncMock(return_value=_default_record())
     foreign_id = deps.audit.append(
         tool_name="file_document",
         input_data={"dry_run": True, "record_uuid": "u"},
@@ -388,6 +409,7 @@ async def test_apply_handles_post_snapshot_failure(
     )
     assert result.success
     assert result.data.operations_applied == 1
+    assert result.data.outcomes[0].status == "applied"
 
     entry = deps.audit.get(result.audit_id)
     snap = (entry.after_state or {}).get("per_op_snapshots", {}).get("0")

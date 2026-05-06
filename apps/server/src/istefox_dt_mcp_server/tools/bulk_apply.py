@@ -57,7 +57,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         pre_move_snapshots: dict[str, str] = {}
         # Capture per-op {before, after} record snapshots so undo can
         # run 3-state drift detection on each op independently.
-        per_op_snapshots: dict[str, dict[str, dict[str, Any]]] = {}
+        per_op_snapshots: dict[str, dict[str, Any]] = {}
 
         async def op() -> BulkApplyResult:
             outcomes: list[BulkOpOutcome] = []
@@ -102,7 +102,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                 # capture before-state so per-op drift detection works.
                 try:
                     rec_before = await deps.adapter.get_record(bop.record_uuid)
-                except AdapterError:
+                except AdapterError as e:
                     # If we can't snapshot, abort this op safely —
                     # applying without a snapshot would leave us
                     # unable to undo.
@@ -112,8 +112,8 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                             record_uuid=bop.record_uuid,
                             op=bop.op,
                             status="failed",
-                            error_code="RECORD_NOT_FOUND",
-                            error_message="cannot snapshot before op",
+                            error_code=e.code.value,
+                            error_message=f"pre-snapshot failed for {bop.record_uuid}: {e}",
                         )
                     )
                     if failed_index is None:
