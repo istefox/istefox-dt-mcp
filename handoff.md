@@ -7,8 +7,12 @@
 ## Snapshot sessione corrente
 
 - **Data fine**: 2026-05-06
-- **Branch**: `main` @ `ac65c60` (in sync con origin/main)
-- **Output principale**: housekeeping post-release — fix avviso `SessionStart` hook del plugin `remember` (creata `.remember/{logs/autonomous,tmp}/` + ignorata in `.gitignore`). Sessione precedente: **v0.2.0 RILASCIATA** (GitHub Release + MCP Registry).
+- **Branch**: `main` @ `feac516` (in sync con origin/main)
+- **Output principale**: due PR landed via subagent-driven-development —
+  - **#62** (`ca0983c`): release.yml usa `RELEASE_PAT` per auto-triggerare `publish-registry.yml` (eliminato manual second-dispatch)
+  - **#64** (`feac516`): per-op drift detection 3-state in `bulk_apply` undo, con `force` honoring per `hostile_drift`. 12 commit, ~600 righe diff, 12 nuovi unit test (214 totali)
+  - Memory `release_workflow.md` aggiornato per riflettere auto-trigger + sezione PAT lifecycle
+  - Spec + plan committati in `docs/superpowers/{specs,plans}/`
 
 ---
 
@@ -36,23 +40,33 @@ PR mergiate da inizio 0.2.0 (ordine cronologico):
 | #60 | feat(cassette-vcr): cassette reali da fixtures-dt-mcp + auto-reset recording + invariant relax + assertion rewrite |
 | #61 | chore: release v0.2.0 (version bump + CHANGELOG dated) |
 
+### Post-0.2.0 (Unreleased — destinato a 0.3.0)
+
+| PR | Topic |
+|---|---|
+| #62 | chore(ci): release.yml usa RELEASE_PAT per auto-triggerare publish-registry.yml (eliminato manual second-dispatch) |
+| #64 | feat(undo): per-op drift detection 3-state in bulk_apply undo (no_drift / already_reverted / hostile_drift + force) — 12 commit, +722/-46 righe, 12 nuovi unit test |
+
+Follow-up issues aperte:
+- **#63**: flesh out integration test per `bulk_apply` undo drift (stub committato in #64)
+
 ### Test status
-- 202 unit + 8 contract test pass (210 totali)
-- 7 integration test (skip default, richiedono DT live)
+- 214 unit + 8 contract test pass (222 totali) — era 210
+- 7+1 integration test (skip default; +1 stub da #64)
+- mypy + ruff + black: clean
 - CI Ubuntu (lint + mypy + unit + contract) e macOS-14 (import-and-bundle): pass
 
 ---
 
 ## Roadmap 0.3.0+
 
-Tutti spostati da 0.2.0 in attesa di trigger esterni o cicli dedicati.
-
 | Item | Stato | Note |
 |---|---|---|
+| **Per-op drift detection per `bulk_apply` undo** | ✅ landed (#64) | Mergiato 2026-05-06. Schema additivo (`per_op_snapshots`), backward compat. |
 | **RAG benchmark cross-corpus** | ⏸️ bloccato | Aspetta early adopter (3+ corpus diversi). Criterio per flippare default `bge-m3` (ADR-008). |
 | **HTTP transport + OAuth multi-device** | ⏸️ ADR-006 da finalizzare | Lavoro sostanziale (~2 settimane). Probabile target 0.3.0. |
 | **`create_smart_rule`** | ⏸️ DEFERRED | Issue #47 — gap nello SDK DT4. Niente da fare lato nostro finché DT4 non aggiorna la dictionary. |
-| **Per-op drift detection per `bulk_apply` undo** | ⏸️ schema upgrade | Audit log schema bump. Probabile target 0.3.0. |
+| **Integration test per `bulk_apply` undo drift** | ⏸️ stub committato | Issue #63 — serve wiring `integration_deps` + tool-call helper + DT live setup. |
 
 ---
 
@@ -60,9 +74,9 @@ Tutti spostati da 0.2.0 in attesa di trigger esterni o cicli dedicati.
 
 Opzioni in ordine di pragmaticità:
 
-1. **Annuncio v0.2.0** via Reddit / forum DEVONthink / HN (vedi `feedback_community_post_style.md` in memory per lo stile asciutto).
-2. **Bug fix gotcha publish-registry**: il workflow non auto-triggera sul tag pushato da release.yml (GH Actions GITHUB_TOKEN limit). Fix: usare PAT in release.yml. Workaround attuale: trigger manuale documentato in `release_workflow.md`.
-3. **Picking up un item della roadmap 0.3.0** — più trattabile probabilmente HTTP transport, ma è ~2 settimane.
+1. **Release 0.3.0** — la sezione `[Unreleased]` di `CHANGELOG.md` ha contenuto sostanziale (drift detection bulk_apply). Procedura standard via `release_workflow.md`. Ora con auto-trigger publish-registry funzionante (PR #62), basta `gh workflow run release.yml`. PAT scade ≈ 2026-08-04 (90gg).
+2. **Annuncio v0.2.0/0.3.0** via Reddit / forum DEVONthink / HN (vedi `feedback_community_post_style.md` in memory per lo stile asciutto).
+3. **Picking up un item della roadmap 0.3.0+** — più trattabile probabilmente HTTP transport (ADR-006), ma è ~2 settimane.
 
 ---
 
@@ -70,18 +84,19 @@ Opzioni in ordine di pragmaticità:
 
 ```
 ~/Developer/Devonthink_MCP/
-├── main branch @ ac65c60 (in sync con origin/main, working tree pulito)
-├── tag v0.2.0 pushato (2026-05-05)
-└── 0 stale branches (cleanup automatico post-merge)
+├── main branch @ feac516 (in sync con origin/main, working tree pulito)
+├── tag v0.2.0 pushato (2026-05-05) — release attuale
+├── secret RELEASE_PAT settato (90gg, expire ≈ 2026-08-04)
+└── stale branches locali da pulire: docs/glama-listing-and-cross-link, feat/create-smart-rule, spec/cassette-vcr-real-data, spec/create-smart-rule, spec/drift-detection-3-state [gone], spec/summarize-topic
 ```
 
 `git log --oneline -5`:
 ```
-ac65c60 chore: ignore .remember/ plugin state directory
-33f8994 docs: handoff.md post-release v0.2.0 + memory note publish-registry manual
-14883d6 chore: release v0.2.0 (#61)
-7d78269 docs: refresh README + CHANGELOG + handoff post-cassette-VCR milestone
-4792529 feat(cassette-vcr): land real-data cassettes + auto-reset recording (#60)
+feac516 feat(undo): per-op drift detection in bulk_apply undo (3-state) (#64)
+ca0983c chore(ci): release.yml uses RELEASE_PAT for auto-trigger of publish-registry (#62)
+428d1d9 docs: implementation plans — publish-registry PAT + bulk_apply drift detection
+da32c58 docs: spec — publish-registry PAT + bulk_apply per-op drift detection
+af231cd docs: handoff.md aggiornato — fix .remember/ hook log dir
 ```
 
 ---
@@ -99,8 +114,16 @@ ac65c60 chore: ignore .remember/ plugin state directory
 ```bash
 cd ~/Developer/Devonthink_MCP
 git status               # → working tree pulito
-git log --oneline -5     # → ultimo commit PR #60
-uv run pytest tests/ -q  # → 210 pass, 7 deselected
+git log --oneline -5     # → ultimo commit PR #64
+uv run pytest tests/ -q  # → 222 pass (214 unit + 8 contract), 8 deselected
+```
+
+Cleanup stale branches locali (opzionale):
+```bash
+git branch -d docs/glama-listing-and-cross-link feat/create-smart-rule \
+              spec/cassette-vcr-real-data spec/create-smart-rule \
+              spec/drift-detection-3-state spec/summarize-topic
+git fetch -p
 ```
 
 Re-cattura cassette (se mai serve):
@@ -109,3 +132,7 @@ Re-cattura cassette (se mai serve):
 uv run istefox-dt-mcp record-cassette --all
 # Output: ↩ reset: moved=N retagged=N ... + 6× ✅ wrote ...
 ```
+
+Spec + plan delle ultime due feature (per future reference):
+- `docs/superpowers/specs/2026-05-06-publish-registry-pat-design.md` + plan omonimo
+- `docs/superpowers/specs/2026-05-06-bulk-apply-drift-detection-design.md` + plan omonimo
