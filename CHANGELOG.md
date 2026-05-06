@@ -3,24 +3,30 @@
 Tutti i cambiamenti rilevanti a `istefox-dt-mcp` sono documentati qui.
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [SemVer](https://semver.org/lang/it/).
 
-## [Unreleased]
+## [0.3.0] — 2026-05-06 — `bulk_apply` undo drift detection + auto-trigger registry publish
+
+Terza release: estensione del classifier 3-state al path `bulk_apply` undo
+(prima limitato a `file_document`) e ripristino del rilascio one-shot con
+auto-trigger del workflow `publish-registry`.
 
 ### Added
-- Per-op drift detection in `bulk_apply` undo (3-state classifier: `no_drift` / `already_reverted` / `hostile_drift`), mirroring the `file_document` undo pattern from 0.2.0.
+- Per-op drift detection in `bulk_apply` undo (3-state classifier: `no_drift` / `already_reverted` / `hostile_drift`), mirroring the `file_document` undo pattern from 0.2.0. PR #64.
 - New response field `drift_per_op: list[{index, uuid, drift_state, drift_details?}]` on `bulk_apply` undo for fine-grained reporting.
 - Audit log persists `after_state.per_op_snapshots` keyed by op index — `{before, after}` `{location, tags}` snapshots captured during apply.
 
 ### Changed
 - `bulk_apply` apply phase now performs 2 extra `get_record` calls per op (pre + post snapshot). On a typical 50-op batch latency goes from ~5s to ~15s under the existing JXA worker pool — accepted cost for correct undo semantics.
 - `bulk_apply` undo response field `drift_detected` now reflects "any op had hostile_drift" instead of always `false`.
+- `release.yml` checkout step now uses `RELEASE_PAT` (fine-grained PAT, scope `Contents: write`, repo-scoped, 90d expiration) so the tag push performed by the release workflow auto-triggers `publish-registry.yml`. Eliminates the manual second-dispatch previously required after every release. PR #62.
 
 ### Notes
 - Audit entries written before this change lack `per_op_snapshots` and continue to work via legacy fallback (no per-op drift detection, identical to pre-0.3.0 behavior).
 
-### Planned for 0.3.0+
+### Planned for 0.4.0+
 - RAG benchmark cross-corpus (3+ corpus, 2+ early adopter) + flip default model (ADR-008)
 - HTTP transport + OAuth (multi-device) — ADR-006
 - `create_smart_rule` tool (DEFERRED, issue #47, gap nello SDK DT4)
+- Integration test fleshing-out per `bulk_apply` undo drift round-trip — issue #63
 
 ---
 
