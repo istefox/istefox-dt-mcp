@@ -41,6 +41,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # need full history for tagging
+          token: ${{ secrets.RELEASE_PAT }}  # PAT so tag push triggers publish-registry.yml
 
       - name: Validate version input
         run: |
