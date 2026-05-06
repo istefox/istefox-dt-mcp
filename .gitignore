@@ -73,6 +73,7 @@ Thumbs.db
 
 # Claude Code session state
 .claude/
+.remember/
 
 # MCPB build staging (artifacts go in dist/, already excluded above)
 *.mcpb
