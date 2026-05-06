@@ -311,3 +311,86 @@ async def test_apply_persists_per_op_before_snapshot(
     snaps = (entry.after_state or {}).get("per_op_snapshots") or {}
     assert "0" in snaps, f"expected per_op_snapshots['0'], got keys: {list(snaps)}"
     assert snaps["0"]["before"] == {"location": "/Inbox", "tags": ["existing"]}
+
+
+@pytest.mark.asyncio
+async def test_apply_persists_per_op_after_snapshot(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """After applying add_tag, per_op_snapshots[idx].after must reflect
+    the record's state post-dispatch (tag now in the list)."""
+    rec_before = Record(
+        uuid="u1",
+        name="r1",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url="x-d://u1",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=["existing"],
+    )
+    rec_after = Record(
+        uuid="u1",
+        name="r1",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url="x-d://u1",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=["existing", "new"],
+    )
+    mock_adapter.get_record = AsyncMock(side_effect=[rec_before, rec_after])
+    mock_adapter.apply_tag = AsyncMock(return_value=None)
+
+    fn = _register_and_get_callable(deps)
+    ops = [_op("u1", "add_tag", tag="new")]
+    token = await _obtain_token(fn, ops)
+    result = await fn(
+        BulkApplyInput(operations=ops, dry_run=False, confirm_token=token)
+    )
+    assert result.success
+
+    entry = deps.audit.get(result.audit_id)
+    snap = (entry.after_state or {}).get("per_op_snapshots", {}).get("0")
+    assert snap is not None
+    assert snap["after"] == {"location": "/Inbox", "tags": ["existing", "new"]}
+
+
+@pytest.mark.asyncio
+async def test_apply_handles_post_snapshot_failure(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """If the post-dispatch get_record raises, the op is still applied
+    but per_op_snapshots[idx] has only `before` (no `after`)."""
+    rec_before = Record(
+        uuid="u1",
+        name="r1",
+        kind=RecordKind.PDF,
+        location="/Inbox",
+        reference_url="x-d://u1",
+        creation_date=datetime.now(),
+        modification_date=datetime.now(),
+        tags=["existing"],
+    )
+    mock_adapter.get_record = AsyncMock(
+        side_effect=[
+            rec_before,
+            RecordNotFoundError("u1"),
+        ]
+    )
+    mock_adapter.apply_tag = AsyncMock(return_value=None)
+
+    fn = _register_and_get_callable(deps)
+    ops = [_op("u1", "add_tag", tag="new")]
+    token = await _obtain_token(fn, ops)
+    result = await fn(
+        BulkApplyInput(operations=ops, dry_run=False, confirm_token=token)
+    )
+    assert result.success
+    assert result.data.operations_applied == 1
+
+    entry = deps.audit.get(result.audit_id)
+    snap = (entry.after_state or {}).get("per_op_snapshots", {}).get("0")
+    assert snap is not None
+    assert "before" in snap
+    assert "after" not in snap

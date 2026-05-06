@@ -154,13 +154,25 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                 )
                 applied += 1
 
-                per_op_snapshots[str(idx)] = {
+                per_op_entry: dict[str, dict[str, Any]] = {
                     "before": {
                         "location": rec_before.location,
                         "tags": list(rec_before.tags),
                     },
-                    # `after` populated in Task 3
                 }
+                # Post-snapshot: best-effort. If the refetch fails (record
+                # deleted between dispatch and refetch — rare), the op is
+                # still recorded as applied but undo falls back to legacy
+                # behavior for THIS op only.
+                try:
+                    rec_after = await deps.adapter.get_record(bop.record_uuid)
+                    per_op_entry["after"] = {
+                        "location": rec_after.location,
+                        "tags": list(rec_after.tags),
+                    }
+                except AdapterError:
+                    pass  # `after` left unset — undo handles missing key
+                per_op_snapshots[str(idx)] = per_op_entry
 
             return BulkApplyResult(
                 operations_total=len(input.operations),
