@@ -3,12 +3,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
-[![Release: v0.1.0](https://img.shields.io/badge/release-v0.1.0-brightgreen.svg)](https://github.com/istefox/istefox-dt-mcp/releases/latest)
+[![Release: v0.3.0](https://img.shields.io/badge/release-v0.3.0-brightgreen.svg)](https://github.com/istefox/istefox-dt-mcp/releases/latest)
 [![Listed on Glama](https://glama.ai/mcp/servers/istefox/istefox-dt-mcp/badge)](https://glama.ai/mcp/servers/istefox/istefox-dt-mcp)
 
 MCP server for DEVONthink 4 — outcome-oriented tools, optional local RAG, privacy-first. Stack: Python 3.12 + FastMCP + ChromaDB + uv.
 
-> **0.1.0 — first public release (May 2026)**. Six MCP tools end-to-end, preview-then-apply with audit log + selective undo, `.mcpb` bundle installable in Claude Desktop. Vector RAG is opt-in experimental — see [ADR-008](docs/adr/0008-embedding-model-selection.md). For day-to-day status, see [`handoff.md`](handoff.md); for project constraints, see [`CLAUDE.md`](CLAUDE.md); for design decisions, see [`docs/adr/`](docs/adr/).
+> **0.3.0 — current release (May 2026)**. Seven MCP tools end-to-end, preview-then-apply with audit log + 3-state selective undo on both `file_document` and `bulk_apply`, `.mcpb` bundle installable in Claude Desktop. Vector RAG is opt-in experimental — see [ADR-008](docs/adr/0008-embedding-model-selection.md). For day-to-day status, see [`handoff.md`](handoff.md); for project constraints, see [`CLAUDE.md`](CLAUDE.md); for design decisions, see [`docs/adr/`](docs/adr/).
 
 ---
 
@@ -114,8 +114,9 @@ The connector is designed **privacy-first** and **local-only**:
 | Version | What | References |
 |---|---|---|
 | **0.1.0** (May 2026) | 6 MCP tools, audit + undo, `.mcpb` bundle, BM25-only retrieval by default | — |
-| **0.2.0** (in progress) | 7th tool `summarize_topic`, 3-state drift detection on `file_document` undo, real-data VCR cassettes from a fixture DT4 DB, RAG benchmark cross-corpus + flip default model | [ADR-005](docs/adr/0005-test-strategy-4-tier.md), [ADR-008](docs/adr/0008-embedding-model-selection.md) |
-| **0.3.0+** (Q4 2026) | HTTP transport + OAuth multi-device, `create_smart_rule`, per-op drift detection on `bulk_apply` undo | [ADR-004](docs/adr/0004-mvp-tool-scope.md) |
+| **0.2.0** (May 2026) | 7th tool `summarize_topic`, 3-state drift detection on `file_document` undo, real-data VCR cassettes from a fixture DT4 DB | [ADR-005](docs/adr/0005-test-strategy-4-tier.md) |
+| **0.3.0** (May 2026) | Per-op 3-state drift detection on `bulk_apply` undo, one-shot release pipeline (auto-trigger MCP Registry publish) | — |
+| **0.4.0+** (Q4 2026) | HTTP transport + OAuth multi-device, `create_smart_rule`, RAG benchmark cross-corpus + flip default embedding model | [ADR-004](docs/adr/0004-mvp-tool-scope.md), [ADR-008](docs/adr/0008-embedding-model-selection.md) |
 
 Full backlog in [`handoff.md`](handoff.md).
 
@@ -137,9 +138,9 @@ For anything not listed: `uv run istefox-dt-mcp doctor` produces a full diagnost
 
 ## Status
 
-**0.1.0 first public release** (May 2026): 6 MCP tools end-to-end, validated in Claude Desktop with real data. `.mcpb` bundle distributable. Audit log + selective undo working. CI on Ubuntu (lint + mypy + unit + contract) and macOS-14 (import + bundle smoke + nightly).
+**0.3.0 current release** (May 2026): 7 MCP tools end-to-end, 3-state drift detection on both `file_document` and `bulk_apply` undo paths, `.mcpb` bundle distributable, MCP Registry entry auto-published on tag push. **222 unit + contract tests** green, mypy clean across 37 source files. CI on Ubuntu (lint + mypy + unit + contract) and macOS-14 (import + bundle smoke + nightly).
 
-**0.2.0 in progress on `main`** (unreleased): `summarize_topic` 7th tool, 3-state drift on `file_document` undo, contract cassettes regenerated from a live DT4 fixture DB via the new `record-cassette` CLI. **210 unit + contract tests** green.
+Previous milestones: **0.2.0** (May 2026) — `summarize_topic` tool + 3-state drift on `file_document` + real-data VCR cassettes via `record-cassette` CLI. **0.1.0** (May 2026) — first public release, 6 tools, BM25-only retrieval.
 
 ---
 
@@ -298,7 +299,7 @@ Unit, contract, and integration tests use `pytest`. For details on capturing new
 
 ## RAG (vector search) — opt-in **experimental**
 
-> **⚠️ Experimental in 0.1.0**: the RAG code is complete and unit-tested, but the embedding model default has not been validated cross-corpus yet. See [ADR-008](docs/adr/0008-embedding-model-selection.md) for the criteria to promote it as the 0.2.0 default. If you enable RAG now, be aware that quality depends heavily on your corpus — feedback via GitHub issues is very welcome.
+> **⚠️ Experimental**: the RAG code is complete and unit-tested, but the embedding model default has not been validated cross-corpus yet. See [ADR-008](docs/adr/0008-embedding-model-selection.md) for the criteria to flip the default to `bge-m3` in a future release (target 0.4.0+). If you enable RAG now, be aware that quality depends heavily on your corpus — feedback via GitHub issues is very welcome.
 
 The server runs in BM25-only mode by default (zero overhead, no models to download). To enable vector search:
 
