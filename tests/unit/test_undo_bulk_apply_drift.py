@@ -171,3 +171,98 @@ async def test_hostile_drift_per_op_reverts_with_force(deps):
     assert result["reverted_count"] == 1
     assert result["drift_detected"] is True  # still surfaces the drift
     deps.adapter.remove_tag.assert_awaited_once_with("u1", "x", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_mixed_batch_drift_states(deps):
+    """3-op batch: idx0 no_drift, idx1 already_reverted, idx2 hostile_drift.
+    Expect 1 reverted, 2 skipped, drift_detected True."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[
+            {"uuid": "u1", "op": "add_tag", "payload": {"tag": "a"}},  # no_drift
+            {"uuid": "u2", "op": "add_tag", "payload": {"tag": "b"}},  # already_reverted
+            {"uuid": "u3", "op": "add_tag", "payload": {"tag": "c"}},  # hostile_drift
+        ],
+        per_op_snapshots={
+            "0": {"before": {"location": "/", "tags": []},
+                  "after":  {"location": "/", "tags": ["a"]}},
+            "1": {"before": {"location": "/", "tags": []},
+                  "after":  {"location": "/", "tags": ["b"]}},
+            "2": {"before": {"location": "/", "tags": []},
+                  "after":  {"location": "/", "tags": ["c"]}},
+        },
+    )
+
+    def fake_get_record(uuid: str):
+        if uuid == "u1":
+            return _record(uuid="u1", location="/", tags=["a"])  # no_drift
+        if uuid == "u2":
+            return _record(uuid="u2", location="/", tags=[])  # already_reverted
+        if uuid == "u3":
+            return _record(uuid="u3", location="/", tags=["c", "foreign"])  # hostile
+        raise ValueError(f"unexpected uuid {uuid}")
+
+    deps.adapter.get_record = AsyncMock(side_effect=fake_get_record)
+    deps.adapter.remove_tag = AsyncMock(return_value=None)
+
+    result = await undo_audit(deps, audit_id, dry_run=False, force=False)
+
+    assert result["reverted_count"] == 1
+    assert result["drift_detected"] is True
+    states = {d["uuid"]: d["drift_state"] for d in result["drift_per_op"]}
+    assert states == {"u1": "no_drift", "u2": "already_reverted", "u3": "hostile_drift"}
+    deps.adapter.remove_tag.assert_awaited_once_with("u1", "a", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_legacy_audit_no_per_op_snapshots(deps):
+    """Audit entry written before this feature: no per_op_snapshots key.
+    Undo must fall back to legacy behavior (no drift detection, blind revert)."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[{"uuid": "u1", "op": "add_tag", "payload": {"tag": "x"}}],
+        per_op_snapshots=None,  # KEY ABSENT — legacy entry
+    )
+    deps.adapter.remove_tag = AsyncMock(return_value=None)
+    # get_record should NOT be called in the legacy branch
+    deps.adapter.get_record = AsyncMock(side_effect=AssertionError("must not be called"))
+
+    result = await undo_audit(deps, audit_id, dry_run=False)
+
+    assert result["reverted"] is True
+    assert result["reverted_count"] == 1
+    # Legacy: drift_per_op is empty (no detection performed)
+    assert result.get("drift_per_op") == []
+    deps.adapter.remove_tag.assert_awaited_once_with("u1", "x", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_per_op_missing_after_falls_back_for_that_op_only(deps):
+    """idx0 has full snapshot (drift detection), idx1 missing `after`
+    (post-snapshot failure during apply). idx1 reverts blindly."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[
+            {"uuid": "u1", "op": "add_tag", "payload": {"tag": "a"}},
+            {"uuid": "u2", "op": "add_tag", "payload": {"tag": "b"}},
+        ],
+        per_op_snapshots={
+            "0": {"before": {"location": "/", "tags": []},
+                  "after":  {"location": "/", "tags": ["a"]}},
+            "1": {"before": {"location": "/", "tags": []}},  # no `after`
+        },
+    )
+
+    def fake_get_record(uuid: str):
+        return _record(uuid=uuid, location="/", tags=["a"] if uuid == "u1" else ["b"])
+
+    deps.adapter.get_record = AsyncMock(side_effect=fake_get_record)
+    deps.adapter.remove_tag = AsyncMock(return_value=None)
+
+    result = await undo_audit(deps, audit_id, dry_run=False)
+
+    assert result["reverted_count"] == 2
+    states = {d["uuid"]: d["drift_state"] for d in result["drift_per_op"]}
+    assert states["u1"] == "no_drift"
+    assert states["u2"] == "unknown"
