@@ -6,9 +6,9 @@
 
 ## Snapshot sessione corrente
 
-- **Data fine**: 2026-05-05 sera
-- **Branch**: `main` @ `14883d6` (in sync con origin/main)
-- **Output principale**: **v0.2.0 RILASCIATA** — GitHub Release + MCP Registry pubblicato. Milestone cassette VCR + summarize_topic + drift 3-state landed.
+- **Data fine**: 2026-05-06
+- **Branch**: `main` @ `ac65c60` (in sync con origin/main)
+- **Output principale**: housekeeping post-release — fix avviso `SessionStart` hook del plugin `remember` (creata `.remember/{logs/autonomous,tmp}/` + ignorata in `.gitignore`). Sessione precedente: **v0.2.0 RILASCIATA** (GitHub Release + MCP Registry).
 
 ---
 
@@ -70,18 +70,18 @@ Opzioni in ordine di pragmaticità:
 
 ```
 ~/Developer/Devonthink_MCP/
-├── main branch @ 14883d6 (in sync con origin/main, working tree pulito)
+├── main branch @ ac65c60 (in sync con origin/main, working tree pulito)
 ├── tag v0.2.0 pushato (2026-05-05)
 └── 0 stale branches (cleanup automatico post-merge)
 ```
 
 `git log --oneline -5`:
 ```
+ac65c60 chore: ignore .remember/ plugin state directory
+33f8994 docs: handoff.md post-release v0.2.0 + memory note publish-registry manual
 14883d6 chore: release v0.2.0 (#61)
 7d78269 docs: refresh README + CHANGELOG + handoff post-cassette-VCR milestone
 4792529 feat(cassette-vcr): land real-data cassettes + auto-reset recording (#60)
-f64d86a docs: handoff.md aggiornato — cassette VCR real-data progress
-4dbc983 fix(sanitizer): rewrite real DT UUIDs in argv via real_uuid_map (#59)
 ```
 
 ---
