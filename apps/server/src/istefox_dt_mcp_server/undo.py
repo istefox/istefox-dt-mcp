@@ -318,12 +318,16 @@ def _is_first_undo(current_location: str, input_data: dict[str, object]) -> bool
     return isinstance(hint, str) and hint == current_location
 
 
-def _bulk_diff_details(current: Record, snap: dict[str, Any]) -> dict[str, Any]:
+def _bulk_diff_details(current: Record, after_snap: dict[str, Any]) -> dict[str, Any]:
     """Same shape as the file_document path: report what diverged
-    between current state and the persisted `after` snapshot."""
-    after = snap.get("after") or {}
-    expected_loc = str(after.get("location") or "")
-    expected_tags = sorted(after.get("tags") or [])
+    between current state and the persisted `after` snapshot.
+
+    `after_snap` is the inner `snap["after"]` dict (with `location`
+    and `tags` keys), not the outer `{"before": ..., "after": ...}`
+    wrapper.
+    """
+    expected_loc = str(after_snap.get("location") or "")
+    expected_tags = sorted(after_snap.get("tags") or [])
     cur_tags = sorted(current.tags)
     details: dict[str, Any] = {}
     if current.location != expected_loc:
@@ -356,10 +360,17 @@ async def _undo_bulk_apply(
     Reverts in reverse order (LIFO) so that any local interaction
     between ops is undone in the opposite sequence.
 
-    `force` is currently a no-op for bulk undo (per-op drift detection
-    is post-MVP — the audit_after_state doesn't have per-op
-    after-snapshots). The flag is accepted for CLI symmetry with
-    file_document undo.
+    When per-op snapshots are present in the audit entry (entries
+    written after this feature landed), each op is evaluated
+    independently via ``compute_drift_state``:
+
+    - ``no_drift``         → reverted.
+    - ``already_reverted`` → skipped (``force`` has no effect).
+    - ``hostile_drift``    → skipped unless ``force=True``.
+
+    Legacy entries (no ``per_op_snapshots`` key) fall back to the
+    pre-feature behavior: every op is added to the inverse plan
+    without drift check.
     """
     audit_id_str = str(entry.audit_id)
     after = entry.after_state or {}
@@ -463,7 +474,9 @@ async def _undo_bulk_apply(
 
             if drift_state == "hostile_drift":
                 if not force:
-                    entry_dict["drift_details"] = _bulk_diff_details(current, snap)
+                    entry_dict["drift_details"] = _bulk_diff_details(
+                        current, snap["after"]
+                    )
                     drift_per_op.append(entry_dict)
                     skipped.append({
                         "uuid": uuid,
@@ -472,7 +485,9 @@ async def _undo_bulk_apply(
                     })
                     continue
                 # force=True: surface drift but proceed
-                entry_dict["drift_details"] = _bulk_diff_details(current, snap)
+                entry_dict["drift_details"] = _bulk_diff_details(
+                    current, snap["after"]
+                )
                 entry_dict["force_applied"] = True
 
             drift_per_op.append(entry_dict)
@@ -526,6 +541,7 @@ async def _undo_bulk_apply(
         reverted=reverted_count,
         failed=len(failures),
         skipped=len(skipped),
+        drift_detected=drift_detected,
     )
     return {
         "audit_id": audit_id_str,

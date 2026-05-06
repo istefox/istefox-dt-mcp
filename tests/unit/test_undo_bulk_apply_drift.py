@@ -139,6 +139,7 @@ async def test_hostile_drift_per_op_skips_without_force(deps):
     result = await undo_audit(deps, audit_id, dry_run=False, force=False)
 
     assert result["reverted"] is False
+    assert result["reverted_count"] == 0
     assert result["drift_detected"] is True
     drift_per_op = result["drift_per_op"]
     assert drift_per_op[0]["drift_state"] == "hostile_drift"
