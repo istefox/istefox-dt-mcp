@@ -85,3 +85,33 @@ async def test_no_drift_per_op_reverts_add_tag(deps):
     assert len(drift_per_op) == 1
     assert drift_per_op[0]["drift_state"] == "no_drift"
     deps.adapter.remove_tag.assert_awaited_once_with("u1", "x", dry_run=False)
+
+
+@pytest.mark.asyncio
+async def test_already_reverted_per_op_skips(deps):
+    """Single add_tag op, user externally removed the tag: undo skips."""
+    audit_id = _audit_bulk_apply(
+        deps,
+        applied_ops=[{"uuid": "u1", "op": "add_tag", "payload": {"tag": "x"}}],
+        per_op_snapshots={
+            "0": {
+                "before": {"location": "/Inbox", "tags": []},
+                "after":  {"location": "/Inbox", "tags": ["x"]},
+            }
+        },
+    )
+    # Current state matches `before`: tag was already removed externally
+    deps.adapter.get_record = AsyncMock(
+        return_value=_record(uuid="u1", location="/Inbox", tags=[])
+    )
+    deps.adapter.remove_tag = AsyncMock(return_value=None)
+
+    result = await undo_audit(deps, audit_id, dry_run=False)
+
+    assert result["reverted"] is False
+    assert result["reverted_count"] == 0
+    assert result["drift_detected"] is False
+    drift_per_op = result["drift_per_op"]
+    assert drift_per_op[0]["drift_state"] == "already_reverted"
+    assert any(s.get("reason") == "already_reverted" for s in result["skipped"])
+    deps.adapter.remove_tag.assert_not_awaited()

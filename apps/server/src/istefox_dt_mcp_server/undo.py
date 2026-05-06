@@ -425,13 +425,22 @@ async def _undo_bulk_apply(
                 continue
 
             drift_state = compute_drift_state(current, snap["before"], snap["after"])
+            entry_dict: dict[str, Any] = {
+                "index": orig_idx, "uuid": uuid, "drift_state": drift_state,
+            }
 
-            # For now (Task 4 scope) we only handle no_drift.
-            # already_reverted and hostile_drift are added in Task 5+6.
-            drift_per_op.append({
-                "index": orig_idx, "uuid": uuid,
-                "drift_state": drift_state,
-            })
+            if drift_state == "already_reverted":
+                entry_dict["reason"] = "already in pre-op state"
+                drift_per_op.append(entry_dict)
+                skipped.append({
+                    "uuid": uuid,
+                    "reason": "already_reverted",
+                    "index": orig_idx,
+                })
+                continue
+
+            # Task 6 will add hostile_drift handling here.
+            drift_per_op.append(entry_dict)
             inverse_plan.append(inverse_op)
         else:
             # Legacy entry (no per_op_snapshots): keep current behavior
