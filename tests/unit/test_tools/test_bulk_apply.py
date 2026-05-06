@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 from istefox_dt_mcp_adapter.errors import RecordNotFoundError
+from istefox_dt_mcp_schemas.common import Record, RecordKind
 from istefox_dt_mcp_schemas.tools import (
     BulkApplyInput,
     BulkApplyOperation,
@@ -14,8 +17,6 @@ from istefox_dt_mcp_schemas.tools import (
 from istefox_dt_mcp_server.tools.bulk_apply import register
 
 if TYPE_CHECKING:
-    from unittest.mock import AsyncMock
-
     from istefox_dt_mcp_server.deps import Deps
 
 
@@ -275,3 +276,38 @@ async def test_apply_with_other_tools_token_is_rejected(
     assert out.success is False
     assert out.error_code == "INVALID_PREVIEW_TOKEN"
     mock_adapter.apply_tag.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_apply_persists_per_op_before_snapshot(
+    deps: Deps, mock_adapter: AsyncMock
+) -> None:
+    """After applying an add_tag op, audit.after_state.per_op_snapshots[idx]
+    must contain a `before` block with the record's location + tags as
+    they were just before dispatch."""
+    mock_adapter.get_record = AsyncMock(
+        return_value=Record(
+            uuid="u1",
+            name="r1",
+            kind=RecordKind.PDF,
+            location="/Inbox",
+            reference_url="x-d://u1",
+            creation_date=datetime.now(),
+            modification_date=datetime.now(),
+            tags=["existing"],
+        )
+    )
+    mock_adapter.apply_tag = AsyncMock(return_value=None)
+
+    fn = _register_and_get_callable(deps)
+    ops = [_op("u1", "add_tag", tag="new")]
+    token = await _obtain_token(fn, ops)
+    result = await fn(
+        BulkApplyInput(operations=ops, dry_run=False, confirm_token=token)
+    )
+    assert result.success
+
+    entry = deps.audit.get(result.audit_id)
+    snaps = (entry.after_state or {}).get("per_op_snapshots") or {}
+    assert "0" in snaps, f"expected per_op_snapshots['0'], got keys: {list(snaps)}"
+    assert snaps["0"]["before"] == {"location": "/Inbox", "tags": ["existing"]}
