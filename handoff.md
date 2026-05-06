@@ -76,7 +76,7 @@ Follow-up issues aperte:
 
 Opzioni in ordine di pragmaticità:
 
-1. **Annuncio v0.3.0** via Reddit / forum DEVONthink / HN (vedi `feedback_community_post_style.md` in memory per lo stile asciutto). Highlight: drift detection completa (file_document + bulk_apply 3-state), release pipeline ora one-shot.
+1. **Postare l'annuncio v0.3.0** — bozza completa già in `docs/announcements/0.3.0.md`. Per r/devonthink: **reply** al thread 0.2.0 esistente (variant ~80 parole, è una release additiva). Per forum DEVONtechnologies: standalone post (~190 parole).
 2. **Picking up un item della roadmap 0.4.0+** — più trattabile probabilmente HTTP transport (ADR-006, ~2 settimane).
 3. **Issue #63**: integration test fleshing-out per bulk_apply drift round-trip (richiede DT live + conftest helpers).
 
@@ -86,20 +86,16 @@ Opzioni in ordine di pragmaticità:
 
 ```
 ~/Developer/Devonthink_MCP/
-├── main branch @ 442ef06 (in sync con origin/main, working tree pulito)
+├── main branch in sync con origin/main, working tree pulito
 ├── tag v0.3.0 pushato (2026-05-06) — release attuale
 ├── secret RELEASE_PAT settato (90gg, expire ≈ 2026-08-04)
 └── stale branches locali da pulire: docs/glama-listing-and-cross-link, feat/create-smart-rule, spec/cassette-vcr-real-data, spec/create-smart-rule, spec/drift-detection-3-state [gone], spec/summarize-topic
 ```
 
-`git log --oneline -5`:
-```
-442ef06 chore: release v0.3.0 (#65)
-a99c363 docs: handoff.md post-merge #62 + #64 (RELEASE_PAT + bulk_apply drift)
-feac516 feat(undo): per-op drift detection in bulk_apply undo (3-state) (#64)
-ca0983c chore(ci): release.yml uses RELEASE_PAT for auto-trigger of publish-registry (#62)
-428d1d9 docs: implementation plans — publish-registry PAT + bulk_apply drift detection
-```
+Ultime PR (in ordine cronologico):
+- `#62` — chore(ci): release.yml RELEASE_PAT (auto-trigger registry)
+- `#64` — feat(undo): per-op drift detection in bulk_apply undo (3-state)
+- `#65` — chore: release v0.3.0 (bump + CHANGELOG)
 
 ---
 
