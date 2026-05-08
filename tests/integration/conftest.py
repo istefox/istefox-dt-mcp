@@ -8,9 +8,14 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from istefox_dt_mcp_adapter.jxa import JXAAdapter
+
+if TYPE_CHECKING:
+    from istefox_dt_mcp_server.deps import Deps
 
 # Probe timeout: a healthy `osascript` round-trip is well under 1s; we
 # allow 2s for slow boots / Apple Events permission dialog.
@@ -129,3 +134,96 @@ async def first_open_database(real_adapter: JXAAdapter) -> str:
     # `str(...)` keeps mypy happy under strict mode (the schemas pkg
     # is treated as `Any` because of `ignore_missing_imports = true`).
     return str(open_dbs[0].name)
+
+
+# ---------------------------------------------------------------------------
+# Live Deps fixtures (for tests that exercise the server-side write path
+# end-to-end against real DEVONthink).
+#
+# These build a fully-wired `Deps` (real JXAAdapter + temp SQLite audit
+# log + Translator + NoopRAGProvider) and a FastMCP instance with the
+# write tools registered, so tests can call `bulk_apply` / `file_document`
+# / `undo_audit` exactly as the server would, but with audit data
+# isolated in a temp dir (no pollution of the user's ~/.local/share).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def live_deps(tmp_path_factory: pytest.TempPathFactory) -> Deps:
+    """Real Deps wired against live DT but with a throwaway data dir.
+
+    `cache=None` so each test sees fresh JXA round-trips. The audit log
+    is temp-scoped: nothing leaks into the user's real audit history.
+    """
+    from istefox_dt_mcp_server.deps import build_default_deps
+
+    data_dir = tmp_path_factory.mktemp("live_deps_")
+    return build_default_deps(
+        data_dir=Path(data_dir),
+        pool_size=2,
+        timeout_s=10.0,
+        cache_enabled=False,
+    )
+
+
+@pytest.fixture
+def mcp_server(live_deps: Deps) -> Any:
+    """A FastMCP server with all tools registered against live deps.
+
+    Return type is `Any` (rather than the parametrized `FastMCP[Any]`)
+    because the FastMCP runtime treats the type as parametrized but
+    `build_server` returns the unparametrized form, which mypy flags.
+    """
+    from istefox_dt_mcp_server.server import build_server
+
+    return build_server(deps=live_deps)
+
+
+@pytest.fixture
+async def fixtures_db_inbox_records(
+    real_adapter: JXAAdapter,
+) -> list[Any]:
+    """Discover the deterministic /Inbox records seeded by the fixtures DB.
+
+    Returns at least 3 records so write-undo tests have material to
+    operate on. Skips if `fixtures-dt-mcp` is not open or has fewer than
+    3 /Inbox records.
+
+    Records are looked up by the names declared in
+    `tests/fixtures/dt-database-manifest.json` (a stable contract) so
+    tests can pick deterministic targets without depending on UUIDs.
+    """
+    db_name = "fixtures-dt-mcp"
+    databases = await real_adapter.list_databases()
+    if not any(db.name == db_name and db.is_open for db in databases):
+        pytest.skip(
+            f"'{db_name}' database not open — run "
+            "`uv run python scripts/setup_test_database.py` and open the DB"
+        )
+
+    # Use a broad term that won't match any specific record but will
+    # surface them via location filtering in a follow-up step. Simpler:
+    # search by each known name from the manifest.
+    target_names = [
+        "Sample PDF Invoice 2025",
+        "Sample RTF Memo",
+        "Sample Plain Text Note",
+        "Sample Second PDF",
+    ]
+    found: list[Any] = []
+    for name in target_names:
+        hits = await real_adapter.search(name, databases=[db_name], max_results=5)
+        # Match exact name + /Inbox location (the manifest contract).
+        for hit in hits:
+            if hit.name == name:
+                rec = await real_adapter.get_record(hit.uuid)
+                if rec.location == "/Inbox":
+                    found.append(rec)
+                    break
+
+    if len(found) < 3:
+        pytest.skip(
+            f"Need ≥3 /Inbox records in '{db_name}' (found {len(found)}). "
+            "Re-seed via `uv run python scripts/setup_test_database.py`"
+        )
+    return found[:3]
