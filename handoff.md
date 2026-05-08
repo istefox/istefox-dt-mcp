@@ -6,9 +6,13 @@
 
 ## Snapshot sessione corrente
 
-- **Data fine**: 2026-05-06
-- **Branch**: `main` @ `442ef06` (in sync con origin/main); tag `v0.3.0` pushato
-- **Output principale**: **v0.3.0 RILASCIATA** — primo end-to-end test dell'auto-trigger (PR #62) riuscito.
+- **Data fine**: 2026-05-08
+- **Branch**: `main` @ `4d718ec` (in sync con origin/main); tag `v0.3.0` pushato
+- **Output principale**: **branch cleanup + PR stale chiusa**.
+  - PR #41 (`docs/glama-listing-and-cross-link`) chiusa come superseded — il contenuto (Glama badge + cross-link `obsidian-mcp-connector`) era già in main via `7d78269` e `787033e`. Verificato in rebase: branch identico a main dopo conflict resolution.
+  - Eliminati 5 stale branches locali (`docs/glama-listing-and-cross-link`, `spec/cassette-vcr-real-data`, `spec/summarize-topic`, `spec/create-smart-rule`, `spec/drift-detection-3-state`).
+  - `feat/create-smart-rule` pushato su origin per preservare `ee9317f docs(jxa): empirical discovery of DT4 smart rule scripting` (122 righe, riferimento per quando Issue #47 sarà sbloccata).
+- **Sessione precedente (2026-05-06)**: **v0.3.0 RILASCIATA** — primo end-to-end test dell'auto-trigger (PR #62) riuscito.
   - **#62** (`ca0983c`): release.yml usa `RELEASE_PAT` per auto-triggerare `publish-registry.yml`
   - **#64** (`feac516`): per-op drift detection 3-state in `bulk_apply` undo, con `force` honoring
   - **#65** (`442ef06`): chore release v0.3.0 (bump + CHANGELOG)
@@ -89,8 +93,10 @@ Opzioni in ordine di pragmaticità:
 ├── main branch in sync con origin/main, working tree pulito
 ├── tag v0.3.0 pushato (2026-05-06) — release attuale
 ├── secret RELEASE_PAT settato (90gg, expire ≈ 2026-08-04)
-└── stale branches locali da pulire: docs/glama-listing-and-cross-link, feat/create-smart-rule, spec/cassette-vcr-real-data, spec/create-smart-rule, spec/drift-detection-3-state [gone], spec/summarize-topic
+└── branch locali: main + feat/create-smart-rule (DEFERRED Issue #47, preservato su origin)
 ```
+
+Branch cleanup (sessione 2026-05-08): chiusa PR #41 stale (Glama badge — superseded, contenuto già in main via `7d78269`); eliminati 5 stale branches locali (`docs/glama-listing-and-cross-link`, `spec/cassette-vcr-real-data`, `spec/summarize-topic`, `spec/create-smart-rule`, `spec/drift-detection-3-state`); `feat/create-smart-rule` pushato su origin per preservare doc empirical-discovery JXA (`ee9317f`).
 
 Ultime PR (in ordine cronologico):
 - `#62` — chore(ci): release.yml RELEASE_PAT (auto-trigger registry)
@@ -114,14 +120,6 @@ cd ~/Developer/Devonthink_MCP
 git status               # → working tree pulito
 git log --oneline -5     # → ultimo commit PR #64
 uv run pytest tests/ -q  # → 222 pass (214 unit + 8 contract), 8 deselected
-```
-
-Cleanup stale branches locali (opzionale):
-```bash
-git branch -d docs/glama-listing-and-cross-link feat/create-smart-rule \
-              spec/cassette-vcr-real-data spec/create-smart-rule \
-              spec/drift-detection-3-state spec/summarize-topic
-git fetch -p
 ```
 
 Re-cattura cassette (se mai serve):
