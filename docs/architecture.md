@@ -117,6 +117,8 @@ Vedi [`docs/adr/REVIEW_ADR.md` §6](adr/REVIEW_ADR.md) per la roadmap revised.
 | [0003](adr/0003-rag-same-process.md) | RAG same-process | Accepted (con spike) |
 | [0004](adr/0004-mvp-tool-scope.md) | MVP 5 tool | Accepted |
 | [0005](adr/0005-test-strategy-4-tier.md) | Test strategy 4-tier | Accepted (con spike) |
+| [0006](adr/0006-oauth-scope-model.md) | OAuth scope model (3 scope + db-scoping in params) | Accepted |
 | [0007](adr/0007-dt4-only.md) | DT4-only, drop DT3 | Accepted |
+| [0008](adr/0008-embedding-model-selection.md) | Embedding model selection | Deferred (0.2.0) |
 
-ADR-006 (OAuth scope), ADR-008 (embedding model), ADR-009 (vector DB migration), ADR-010 (distribution), ADR-011 (telemetry), ADR-012 (i18n), ADR-013 (concurrency), ADR-014 (rate limiting) → da scrivere alle settimane indicate in REVIEW_ADR §7.
+ADR-009 (vector DB migration), ADR-010 (distribution), ADR-011 (telemetry), ADR-012 (i18n), ADR-013 (concurrency), ADR-014 (rate limiting) → da scrivere alle settimane indicate in REVIEW_ADR §7.
