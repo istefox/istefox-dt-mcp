@@ -19,6 +19,7 @@ from istefox_dt_mcp_adapter.cache import SQLiteCache
 from istefox_dt_mcp_adapter.contract import DEVONthinkAdapter
 from istefox_dt_mcp_adapter.rag import NoopRAGProvider
 from istefox_dt_mcp_server.audit import AuditLog
+from istefox_dt_mcp_server.auth.consent import ConsentStore
 from istefox_dt_mcp_server.deps import Deps
 from istefox_dt_mcp_server.i18n import Translator
 
@@ -51,11 +52,17 @@ def mock_adapter() -> AsyncMock:
 
 
 @pytest.fixture
+def consent_store(tmp_data_dir: Path) -> ConsentStore:
+    return ConsentStore(tmp_data_dir / "consent.sqlite")
+
+
+@pytest.fixture
 def deps(
     mock_adapter: AsyncMock,
     audit_log: AuditLog,
     translator: Translator,
     cache: SQLiteCache,
+    consent_store: ConsentStore,
 ) -> Deps:
     return Deps(
         adapter=mock_adapter,
@@ -63,4 +70,5 @@ def deps(
         translator=translator,
         cache=cache,
         rag=NoopRAGProvider(),
+        consent=consent_store,
     )

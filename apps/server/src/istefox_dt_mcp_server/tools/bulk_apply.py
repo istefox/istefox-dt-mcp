@@ -35,7 +35,7 @@ from istefox_dt_mcp_schemas.tools import (
     BulkOpOutcome,
 )
 
-from ..auth.scope import Scope
+from ..auth.scope import Scope, current_context
 from ._common import safe_call, validate_confirm_token
 
 if TYPE_CHECKING:
@@ -82,6 +82,27 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                 tool_name="bulk_apply",
                 confirm_token=input.confirm_token,
             )
+
+            # Per-database consent pre-flight (ADR-006). For HTTP
+            # principals we resolve each unique record's DB UUID and
+            # raise ReconsentRequiredError on the first unauthorized
+            # database — BEFORE any mutation happens. stdio principals
+            # short-circuit inside check_or_raise (always authorized).
+            ctx = current_context()
+            if ctx is not None:
+                unique_record_uuids = {bop.record_uuid for bop in input.operations}
+                unique_db_uuids: set[str] = set()
+                for ru in unique_record_uuids:
+                    try:
+                        rec_for_consent = await deps.adapter.get_record(ru)
+                    except AdapterError:
+                        # Skip; the apply loop will surface this op's
+                        # failure with the proper RECORD_NOT_FOUND code.
+                        continue
+                    if rec_for_consent.database_uuid:
+                        unique_db_uuids.add(rec_for_consent.database_uuid)
+                for db_uuid in unique_db_uuids:
+                    deps.consent.check_or_raise(ctx.principal_id, db_uuid)
 
             # Apply phase: dispatch each op
             applied = 0

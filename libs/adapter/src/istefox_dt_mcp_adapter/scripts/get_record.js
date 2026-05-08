@@ -58,6 +58,10 @@ function run(argv) {
     modification_date: iso(function() { return record.modificationDate(); }),
     tags: safe(function() { return record.tags(); }, []),
     size_bytes: safe(function() { return record.size(); }, null),
-    word_count: safe(function() { return record.wordCount(); }, null)
+    word_count: safe(function() { return record.wordCount(); }, null),
+    // 0.4.0+ — used by ConsentStore to gate writes on a per-database
+    // basis. Wrapped in safe() because special record types (smart
+    // group items, virtual placeholders) may throw on database().
+    database_uuid: safeStr(function() { return record.database().uuid(); }) || null
   });
 }

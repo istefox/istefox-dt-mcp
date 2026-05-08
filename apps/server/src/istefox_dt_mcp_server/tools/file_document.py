@@ -33,7 +33,7 @@ from istefox_dt_mcp_schemas.tools import (
     FileDocumentResult,
 )
 
-from ..auth.scope import Scope
+from ..auth.scope import Scope, current_context
 from ._common import safe_call, validate_confirm_token, validate_destination_path
 
 if TYPE_CHECKING:
@@ -80,6 +80,16 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         }
 
         async def op() -> FileDocumentResult:
+            # Per-database consent gate (ADR-006). For HTTP principals
+            # we must verify the principal has authorized the target
+            # record's database. stdio short-circuits inside check_or_raise.
+            ctx = current_context()
+            if ctx is not None and record.database_uuid:
+                deps.consent.check_or_raise(
+                    ctx.principal_id,
+                    record.database_uuid,
+                )
+
             preview = await _build_preview(deps, record, input)
 
             if input.dry_run:

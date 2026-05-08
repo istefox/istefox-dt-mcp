@@ -36,6 +36,7 @@ from istefox_dt_mcp_adapter.errors import (
 from istefox_dt_mcp_schemas.common import Envelope
 
 from ..audit import timer
+from ..auth.consent import ReconsentRequiredError
 from ..auth.scope import (
     InsufficientScopeError,
     Scope,
@@ -52,6 +53,12 @@ if TYPE_CHECKING:
 # Error code surfaced in the envelope when the principal is missing
 # the scope a tool requires. Matches ADR-006 §"Errori strutturati".
 OAUTH_INSUFFICIENT_SCOPE = "OAUTH_INSUFFICIENT_SCOPE"
+
+# Error code surfaced when the principal hasn't authorized the target
+# database. Database-scoping is server-side state (ConsentStore), not
+# part of the OAuth token. See ADR-006 §"Database-scoping al di fuori
+# dello scope OAuth" and `auth/consent.py`.
+RECONSENT_REQUIRED = "RECONSENT_REQUIRED"
 
 
 # Preview tokens expire after 5 minutes (UX-driven: enough time for
@@ -291,6 +298,45 @@ async def safe_call[T, OutT: Envelope[Any]](
                     recovery_hint=(
                         f"Riesegui il consent flow concedendo lo scope "
                         f"'{e.required.value}' al client."
+                    ),
+                )
+            except ReconsentRequiredError as e:
+                # Principal hasn't authorized the target database.
+                # Database-scoping is decoupled from OAuth scopes
+                # (ADR-006); the recovery is to re-run the consent
+                # flow and tick the database checkbox.
+                audit_id = deps.audit.append(
+                    tool_name=tool_name,
+                    input_data=input_data,
+                    output_data=None,
+                    duration_ms=t.duration_ms,
+                    error_code=RECONSENT_REQUIRED,
+                    before_state=before_state,
+                )
+                structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+                log.warning(
+                    "tool_reconsent_required",
+                    principal=e.principal_id,
+                    database_uuid=e.database_uuid,
+                    database_name=e.database_name,
+                )
+                db_label = (
+                    f"{e.database_name!r} ({e.database_uuid})"
+                    if e.database_name
+                    else e.database_uuid
+                )
+                return output_factory(
+                    success=False,
+                    data=None,
+                    audit_id=audit_id,
+                    error_code=RECONSENT_REQUIRED,
+                    error_message=(
+                        f"Il database {db_label} non è autorizzato per il "
+                        f"client corrente."
+                    ),
+                    recovery_hint=(
+                        "Riesegui il consent flow e seleziona il database "
+                        "richiesto nella lista di autorizzazioni."
                     ),
                 )
             except AdapterError as e:

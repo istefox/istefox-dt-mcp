@@ -22,6 +22,7 @@ from istefox_dt_mcp_adapter.jxa import JXAAdapter
 from istefox_dt_mcp_adapter.rag import NoopRAGProvider
 
 from .audit import AuditLog
+from .auth.consent import ConsentStore
 from .i18n import Translator
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class Deps:
     translator: Translator
     cache: SQLiteCache | None
     rag: RAGProvider
+    consent: ConsentStore
 
 
 def _build_rag_provider(base: Path) -> RAGProvider:
@@ -97,6 +99,7 @@ def build_default_deps(
     audit = AuditLog(base / "audit.sqlite")
     translator = Translator()
     rag = _build_rag_provider(base)
+    consent = ConsentStore(base / "consent.sqlite")
 
     return Deps(
         adapter=adapter,
@@ -104,4 +107,5 @@ def build_default_deps(
         translator=translator,
         cache=cache,
         rag=rag,
+        consent=consent,
     )

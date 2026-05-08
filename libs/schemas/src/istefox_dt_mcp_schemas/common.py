@@ -88,6 +88,14 @@ class Record(LooseModel):
     tags: list[str] = Field(default_factory=list)
     size_bytes: int | None = None
     word_count: int | None = None
+    database_uuid: str | None = Field(
+        default=None,
+        description=(
+            "UUID of the parent database. Populated by get_record.js since "
+            "0.4.0; used by ConsentStore to gate per-database write access. "
+            "May be None for legacy records or special types (smart groups)."
+        ),
+    )
 
 
 class SearchResult(LooseModel):
