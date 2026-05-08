@@ -7,11 +7,14 @@
 ## Snapshot sessione corrente
 
 - **Data fine**: 2026-05-08
-- **Branch**: `main` @ `6a0599c` (in sync con origin/main); tag `v0.3.0` pushato
-- **Output principale**: **ADR-006 finalizzato + Issue #63 chiusa (live run verde) + smoke pass + branch cleanup**.
-  - `fb5c028` — **ADR-006 OAuth scope model** (Accepted): 3 scope (`dt:read`, `dt:write`, `dt:admin`) + database-scoping persistito server-side fuori dal token OAuth, errori `RECONSENT_REQUIRED` per database creati post-consent. Implementazione rinviata a 0.4.0 con HTTP transport.
-  - `2c2eeea` + `6a0599c` — **Issue #63 CHIUSA**: integration test `test_bulk_apply_undo_drift_round_trip` PASSED in 10.85s live (DT4 + fixtures-dt-mcp). Nuove fixture `live_deps`/`mcp_server`/`fixtures_db_inbox_records`, round-trip end-to-end (3-op bulk_apply → 3 mutazioni esterne → undo dry-run con/senza force) + cleanup try/finally. Fix `6a0599c`: tolerance su trailing-slash (DT4 ritorna `/Inbox/`).
-  - Smoke E2E (`scripts/smoke_e2e.sh`) PASS — 4/5 step ok, solo warn su `.mcpb` non rebuilded (atteso pre-tag).
+- **Branch**: `main` @ `3dc3df9` (in sync con origin/main); tag `v0.3.0` pushato; **0.4.0 phase 1+2 in flight**
+- **Output principale**: **ADR-006 finalizzato + Issue #63 chiusa + 0.4.0 phases 1-2 shipped (HTTP transport + scope plumbing) + smoke esteso a HTTP**.
+  - `fb5c028` — **ADR-006 OAuth scope model** (Accepted): 3 scope, database-scoping server-side, RECONSENT_REQUIRED.
+  - `2c2eeea` + `6a0599c` — **Issue #63 CHIUSA**: integration test PASSED 10.85s live.
+  - `c3e8e74` — **0.4.0 spec + plan** in `docs/superpowers/{specs,plans}/2026-05-08-http-transport-oauth*.md`. Lavoro fasato in 5 PR (~2 settimane).
+  - `860225c` — **Phase 1**: HTTP streamable transport via uvicorn. CLI `--transport http --host --port`. Smoke E2E Step 6 verifica HTTP lifecycle. 6 nuovi unit test (228 totali).
+  - `3dc3df9` — **Phase 2**: scope enforcement plumbing (Scope enum, RequestContext contextvar, ScopeMiddleware, safe_call gate). Tutti i 7 tool decorati con `required_scope` (READ/WRITE). HTTP usa header `X-Istefox-Scope` (testing stub fino a phase 4). 11 nuovi unit test (239 totali).
+  - Smoke E2E PASS — 6/6 step (era 5/5), incluso HTTP transport.
   - PR #41 (`docs/glama-listing-and-cross-link`) chiusa come superseded — il contenuto (Glama badge + cross-link `obsidian-mcp-connector`) era già in main via `7d78269` e `787033e`. Verificato in rebase: branch identico a main dopo conflict resolution.
   - Eliminati 5 stale branches locali; `feat/create-smart-rule` pushato su origin per preservare `ee9317f docs(jxa): empirical discovery of DT4 smart rule scripting` (riferimento per quando Issue #47 sarà sbloccata).
 - **Sessione precedente (2026-05-06)**: **v0.3.0 RILASCIATA** — primo end-to-end test dell'auto-trigger (PR #62) riuscito.
@@ -58,12 +61,12 @@ PR mergiate da inizio 0.2.0 (ordine cronologico):
 
 Follow-up issues aperte: nessuna. (Issue #63 chiusa 2026-05-08 dopo run live verde.)
 
-### Test status
-- 214 unit + 8 contract test pass (222 totali)
+### Test status (0.4.0 phase 2 baseline)
+- 231 unit + 8 contract test pass (239 totali) — era 222
 - 8 integration test (skip default); round-trip drift di #63 verificato live PASS in 10.85s
-- mypy + ruff + black: clean
+- mypy + ruff + black: clean (mypy gate `apps libs`)
 - CI Ubuntu (lint + mypy + unit + contract) e macOS-14 (import-and-bundle): pass
-- Smoke E2E pre-release PASS (4/5 step ok, warn solo su `.mcpb` non rebuilded)
+- Smoke E2E pre-release PASS — 6/6 step (incluso nuovo Step 6 HTTP transport)
 
 ---
 
@@ -72,19 +75,23 @@ Follow-up issues aperte: nessuna. (Issue #63 chiusa 2026-05-08 dopo run live ver
 | Item | Stato | Note |
 |---|---|---|
 | **RAG benchmark cross-corpus** | ⏸️ bloccato | Aspetta early adopter (3+ corpus diversi). Criterio per flippare default `bge-m3` (ADR-008). |
-| **HTTP transport + OAuth multi-device** | 🟢 ADR-006 Accepted | Decisione OAuth scope formalizzata in `0006-oauth-scope-model.md`. Implementazione (~2 settimane) target 0.4.0 — apre lavoro su transport, callback URL, consent UI, ConsentStore. |
+| **HTTP transport + OAuth multi-device (0.4.0)** | 🟡 in flight 2/5 phases | Spec+plan in `docs/superpowers/`. Phase 1 (HTTP transport) ✅ `860225c`. Phase 2 (scope plumbing) ✅ `3dc3df9`. Resta phase 3 (ConsentStore), 4 (OAuth flow + consent UI), 5 (integration tests + release). |
 | **`create_smart_rule`** | ⏸️ DEFERRED | Issue #47 — gap nello SDK DT4. Niente da fare lato nostro finché DT4 non aggiorna la dictionary. |
 | **Integration test per `bulk_apply` undo drift** | ✅ DONE | Issue #63 chiusa 2026-05-08. Test PASS in 10.85s live. |
+| **Fixture stability** | 🟡 noto | `Sample Second PDF` mancante in `fixtures-dt-mcp` (probabilmente da test residuo). Re-seed con `uv run python scripts/setup_test_database.py` quando necessario; il fixture `fixtures_db_inbox_records` skip se <3 record in /Inbox. |
 
 ---
 
 ## Cose da fare prossima sessione
 
-Opzioni in ordine di pragmaticità:
+Opzioni in ordine di pragmaticità (allineate alla roadmap 0.4.0):
 
-1. **Postare l'annuncio v0.3.0** — bozza completa già in `docs/announcements/0.3.0.md`. Per r/devonthink: **reply** al thread 0.2.0 esistente (variant ~80 parole, è una release additiva). Per forum DEVONtechnologies: standalone post (~190 parole).
-2. **HTTP transport (target 0.4.0)** — ora che ADR-006 è Accepted: scaffold del transport (uvicorn + streamable-http), middleware di consent/scope check, OAuth callback design (loopback localhost vs Cloudflare Tunnel — open question da REVIEW_ADR §3 #12), `ConsentStore` SQLite, integration test multi-client. ~2 settimane.
-3. **Note follow-up** sulla session 2026-05-08: nessun test integration in più richiesto sul write path (round-trip già coperto). Eventuale estensione: test analogo per `file_document` undo (3-state già coperto via unit, ma round-trip live mancante).
+1. **Phase 3 — ConsentStore** (più tractable, ~300 LOC): SQLite `consent` table (principal_id, database_uuid, granted_at), `Deps.consent` field, `filter_visible` integrato in `list_databases`, pre-flight `check_or_raise` in `safe_call` per write tools, errore `RECONSENT_REQUIRED`. Plan task 3.1-3.6 in `docs/superpowers/plans/2026-05-08-http-transport-oauth.md`.
+2. **Phase 4 — OAuth flow + consent UI** (~600 LOC, più sostanziosa): authlib + jinja2 → `auth/oauth.py` (PKCE, JWT signing), `auth/consent_ui.py` (template HTML), routes `/oauth/authorize` + `/oauth/token`, sostituire header stub con bearer token validation. Aggiungere deps `authlib>=1.3` + `jinja2>=3.1` (già nell'extra `[http-oauth]`). Eventuale ADR-015 per callback URL design (Cloudflare Tunnel vs loopback).
+3. **Phase 5 — Integration tests + release** (~300 LOC): test E2E del flow PKCE live, smoke esteso con auth header, README + CHANGELOG, bump 0.4.0, release workflow.
+4. **Postare l'annuncio v0.3.0** se si vuole interrompere la roadmap 0.4.0 — bozza in `docs/announcements/0.3.0.md`.
+
+Nota fixture: prima di lanciare `tests/integration/test_undo_bulk_apply_drift_live.py` re-seed con `uv run python scripts/setup_test_database.py` per ripristinare i 4 record /Inbox di `fixtures-dt-mcp` (Sample Second PDF è mancante).
 
 ---
 

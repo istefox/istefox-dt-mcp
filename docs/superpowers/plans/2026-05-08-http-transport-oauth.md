@@ -100,7 +100,7 @@ Each phase = one PR. Tasks within a phase are sequential. Phases are gated by re
 ## Tracking
 
 - [x] Phase 1 — HTTP transport foundation (`860225c`, 2026-05-08, smoke 6/6 PASS)
-- [ ] Phase 2 — OAuth scope decorator
+- [x] Phase 2 — Scope enforcement plumbing (`3dc3df9`, 2026-05-08, 239 tests pass)
 - [ ] Phase 3 — ConsentStore
 - [ ] Phase 4 — OAuth flow + consent UI
 - [ ] Phase 5 — Integration tests + release
