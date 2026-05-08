@@ -37,17 +37,43 @@ def cli(ctx: click.Context, log_level: str) -> None:
 @click.option(
     "--transport",
     default="stdio",
-    type=click.Choice(["stdio"]),
+    type=click.Choice(["stdio", "http"]),
     show_default=True,
-    help="Transport mode. HTTP transport ships in v2.",
+    help=(
+        "Transport mode. 'stdio' is the default for Claude Desktop. "
+        "'http' starts a streamable-HTTP server on --host:--port "
+        "(anonymous in 0.4.0-alpha; OAuth lands in 0.4.0 phase 4)."
+    ),
 )
-def serve(transport: str) -> None:
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help=(
+        "HTTP bind address. Loopback by default; do NOT expose without "
+        "a tunnel terminating TLS + auth at the edge."
+    ),
+)
+@click.option(
+    "--port",
+    default=3000,
+    type=int,
+    show_default=True,
+    help="HTTP listen port.",
+)
+def serve(transport: str, host: str, port: int) -> None:
     """Start the MCP server."""
     server = build_server()
     if transport == "stdio":
         server.run()
-    else:  # pragma: no cover — only stdio in v1
-        raise click.UsageError(f"transport {transport} not supported in v1")
+        return
+    if transport == "http":
+        from .transport.http import run_http
+
+        run_http(server, host=host, port=port)
+        return
+    # Unreachable given click.Choice — defensive.
+    raise click.UsageError(f"unknown transport {transport!r}")
 
 
 @cli.command()

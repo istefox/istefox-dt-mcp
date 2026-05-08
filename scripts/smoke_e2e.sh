@@ -315,6 +315,104 @@ fi
 echo "   ok: initialize response received, server exited cleanly"
 
 # ---------------------------------------------------------------------------
+# Step 6 — HTTP transport lifecycle (0.4.0 phase 1).
+#
+# Starts the server with --transport http on a random high port, sends
+# `initialize` over HTTP (Streamable transport requires SSE accept), and
+# verifies the response contains a JSON-RPC envelope with id=1. SIGTERM
+# stops the server; we wait briefly to confirm clean shutdown.
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=> Step 6 — HTTP transport lifecycle (initialize + clean shutdown)"
+
+# Pick a random high port to avoid stomping on dev servers.
+HTTP_PORT="$(python3 -c "import random; print(random.randint(20000, 29999))")"
+HTTP_LOG="${TMP_DIR}/http-server.log"
+
+# Start the HTTP server in background. We capture its PID so cleanup
+# trap can kill it on any path out (success/failure/signal).
+uv run --directory "${PROJECT_ROOT}" istefox-dt-mcp serve \
+    --transport http --host 127.0.0.1 --port "${HTTP_PORT}" \
+    >"${HTTP_LOG}" 2>&1 &
+SERVER_PID=$!
+
+# Wait up to 5s for the server to bind. The "Uvicorn running on" line in
+# the log is the canonical readiness signal.
+READY=""
+for _ in $(seq 1 20); do
+    if grep -q "Uvicorn running on" "${HTTP_LOG}" 2>/dev/null; then
+        READY=1
+        break
+    fi
+    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+        echo "   FAIL: HTTP server died before listening" >&2
+        echo "   --- log ---" >&2
+        cat "${HTTP_LOG}" >&2 || true
+        echo "[FAIL] smoke fail (step 6)"
+        exit 3
+    fi
+    sleep 0.25
+done
+
+if [[ -z "${READY}" ]]; then
+    echo "   FAIL: HTTP server didn't reach 'Uvicorn running' within 5s" >&2
+    echo "   --- log ---" >&2
+    cat "${HTTP_LOG}" >&2 || true
+    echo "[FAIL] smoke fail (step 6)"
+    exit 3
+fi
+
+HTTP_RESP="${TMP_DIR}/http-resp.txt"
+HTTP_INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0.0.0"}}}'
+
+set +e
+HTTP_CODE="$(curl -s -o "${HTTP_RESP}" -w "%{http_code}" --max-time 5 \
+    -X POST "http://127.0.0.1:${HTTP_PORT}/mcp/" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d "${HTTP_INIT}")"
+CURL_RC=$?
+set -e
+
+if (( CURL_RC != 0 )); then
+    echo "   FAIL: curl exited ${CURL_RC} talking to HTTP server" >&2
+    echo "   --- server log (tail) ---" >&2
+    tail -n 30 "${HTTP_LOG}" >&2 || true
+    echo "[FAIL] smoke fail (step 6)"
+    exit 3
+fi
+
+if [[ "${HTTP_CODE}" != "200" ]]; then
+    echo "   FAIL: expected HTTP 200, got ${HTTP_CODE}" >&2
+    echo "   --- response body ---" >&2
+    cat "${HTTP_RESP}" >&2 || true
+    echo "[FAIL] smoke fail (step 6)"
+    exit 3
+fi
+
+if ! grep -q '"id":1' "${HTTP_RESP}"; then
+    echo "   FAIL: HTTP response missing JSON-RPC id=1 marker" >&2
+    echo "   --- response body ---" >&2
+    cat "${HTTP_RESP}" >&2 || true
+    echo "[FAIL] smoke fail (step 6)"
+    exit 3
+fi
+
+# Clean shutdown.
+kill -TERM "${SERVER_PID}" 2>/dev/null || true
+# Wait briefly; the cleanup trap will SIGKILL if needed.
+for _ in $(seq 1 8); do
+    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+        break
+    fi
+    sleep 0.25
+done
+SERVER_PID=""
+
+echo "   ok: HTTP initialize response received, server exited cleanly (port ${HTTP_PORT})"
+
+# ---------------------------------------------------------------------------
 # Final verdict.
 # ---------------------------------------------------------------------------
 

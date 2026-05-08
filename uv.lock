@@ -1045,28 +1045,30 @@ dependencies = [
     { name = "opentelemetry-sdk" },
     { name = "pydantic" },
     { name = "structlog" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
-http = [
+http-oauth = [
     { name = "authlib" },
-    { name = "uvicorn" },
+    { name = "jinja2" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "authlib", marker = "extra == 'http'", specifier = ">=1.3" },
+    { name = "authlib", marker = "extra == 'http-oauth'", specifier = ">=1.3" },
     { name = "click", specifier = ">=8.1" },
     { name = "fastmcp", specifier = ">=3.2" },
     { name = "istefox-dt-mcp-adapter", editable = "libs/adapter" },
     { name = "istefox-dt-mcp-schemas", editable = "libs/schemas" },
     { name = "istefox-dt-mcp-sidecar", editable = "apps/sidecar" },
+    { name = "jinja2", marker = "extra == 'http-oauth'", specifier = ">=3.1" },
     { name = "opentelemetry-sdk", specifier = ">=1.25" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "structlog", specifier = ">=24.1" },
-    { name = "uvicorn", marker = "extra == 'http'", specifier = ">=0.30" },
+    { name = "uvicorn", specifier = ">=0.30" },
 ]
-provides-extras = ["http"]
+provides-extras = ["http-oauth"]
 
 [[package]]
 name = "istefox-dt-mcp-sidecar"

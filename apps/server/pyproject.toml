@@ -13,6 +13,9 @@ dependencies = [
     "pydantic>=2.7",
     # CLI
     "click>=8.1",
+    # HTTP transport (streamable-HTTP server runtime). FastMCP exposes
+    # the API; uvicorn is the actual ASGI runner it dispatches to.
+    "uvicorn>=0.30",
     # Logging / observability
     "structlog>=24.1",
     "opentelemetry-sdk>=1.25",
@@ -23,9 +26,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-http = [
-    "uvicorn>=0.30",
+# OAuth lands in 0.4.0 phase 4. Until then, HTTP transport runs
+# without auth (anonymous, intended for trusted localhost only).
+http-oauth = [
     "authlib>=1.3",
+    "jinja2>=3.1",
 ]
 
 [project.scripts]
