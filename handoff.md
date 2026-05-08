@@ -7,11 +7,12 @@
 ## Snapshot sessione corrente
 
 - **Data fine**: 2026-05-08
-- **Branch**: `main` @ `4d718ec` (in sync con origin/main); tag `v0.3.0` pushato
-- **Output principale**: **branch cleanup + PR stale chiusa**.
+- **Branch**: `main` @ `2c2eeea` (in sync con origin/main); tag `v0.3.0` pushato
+- **Output principale**: **ADR-006 finalizzato + Issue #63 integration test fleshed out + branch cleanup**.
+  - `fb5c028` — **ADR-006 OAuth scope model** (Accepted): 3 scope (`dt:read`, `dt:write`, `dt:admin`) + database-scoping persistito server-side fuori dal token OAuth, errori `RECONSENT_REQUIRED` per database creati post-consent. Implementazione rinviata a 0.4.0 con HTTP transport.
+  - `2c2eeea` — **Issue #63** integration test completo: nuove fixture (`live_deps`, `mcp_server`, `fixtures_db_inbox_records`), invocazione end-to-end di `bulk_apply` via `mcp.call_tool`, simulazione 3 scenari drift, assert su `force=False`/`force=True` con cleanup try/finally. Test verifica live richiede DT4 + fixtures-dt-mcp aperto (non eseguito in questa sessione).
   - PR #41 (`docs/glama-listing-and-cross-link`) chiusa come superseded — il contenuto (Glama badge + cross-link `obsidian-mcp-connector`) era già in main via `7d78269` e `787033e`. Verificato in rebase: branch identico a main dopo conflict resolution.
-  - Eliminati 5 stale branches locali (`docs/glama-listing-and-cross-link`, `spec/cassette-vcr-real-data`, `spec/summarize-topic`, `spec/create-smart-rule`, `spec/drift-detection-3-state`).
-  - `feat/create-smart-rule` pushato su origin per preservare `ee9317f docs(jxa): empirical discovery of DT4 smart rule scripting` (122 righe, riferimento per quando Issue #47 sarà sbloccata).
+  - Eliminati 5 stale branches locali; `feat/create-smart-rule` pushato su origin per preservare `ee9317f docs(jxa): empirical discovery of DT4 smart rule scripting` (riferimento per quando Issue #47 sarà sbloccata).
 - **Sessione precedente (2026-05-06)**: **v0.3.0 RILASCIATA** — primo end-to-end test dell'auto-trigger (PR #62) riuscito.
   - **#62** (`ca0983c`): release.yml usa `RELEASE_PAT` per auto-triggerare `publish-registry.yml`
   - **#64** (`feac516`): per-op drift detection 3-state in `bulk_apply` undo, con `force` honoring
@@ -55,11 +56,11 @@ PR mergiate da inizio 0.2.0 (ordine cronologico):
 | #65 | chore: release v0.3.0 (version bump + CHANGELOG dated) |
 
 Follow-up issues aperte:
-- **#63**: flesh out integration test per `bulk_apply` undo drift (stub committato in #64)
+- **#63**: integration test per `bulk_apply` undo drift — **fleshed out in `2c2eeea` (sessione 2026-05-08)**. Da chiudere dopo prima esecuzione live verde.
 
 ### Test status
-- 214 unit + 8 contract test pass (222 totali) — era 210
-- 7+1 integration test (skip default; +1 stub da #64)
+- 214 unit + 8 contract test pass (222 totali)
+- 8 integration test (skip default; include il round-trip drift di #63 ora completo, da verificare live)
 - mypy + ruff + black: clean
 - CI Ubuntu (lint + mypy + unit + contract) e macOS-14 (import-and-bundle): pass
 
@@ -70,9 +71,9 @@ Follow-up issues aperte:
 | Item | Stato | Note |
 |---|---|---|
 | **RAG benchmark cross-corpus** | ⏸️ bloccato | Aspetta early adopter (3+ corpus diversi). Criterio per flippare default `bge-m3` (ADR-008). |
-| **HTTP transport + OAuth multi-device** | ⏸️ ADR-006 da finalizzare | Lavoro sostanziale (~2 settimane). Probabile target 0.4.0. |
+| **HTTP transport + OAuth multi-device** | 🟢 ADR-006 Accepted | Decisione OAuth scope formalizzata in `0006-oauth-scope-model.md`. Implementazione (~2 settimane) target 0.4.0 — apre lavoro su transport, callback URL, consent UI, ConsentStore. |
 | **`create_smart_rule`** | ⏸️ DEFERRED | Issue #47 — gap nello SDK DT4. Niente da fare lato nostro finché DT4 non aggiorna la dictionary. |
-| **Integration test per `bulk_apply` undo drift** | ⏸️ stub committato | Issue #63 — serve wiring `integration_deps` + tool-call helper + DT live setup. |
+| **Integration test per `bulk_apply` undo drift** | 🟡 da verificare live | Issue #63 — codice completo in `2c2eeea`. Run con DT4 + fixtures-dt-mcp aperto: `uv run pytest tests/integration/test_undo_bulk_apply_drift_live.py -m integration -v`. Chiudere issue dopo prima run verde. |
 
 ---
 
@@ -80,9 +81,9 @@ Follow-up issues aperte:
 
 Opzioni in ordine di pragmaticità:
 
-1. **Postare l'annuncio v0.3.0** — bozza completa già in `docs/announcements/0.3.0.md`. Per r/devonthink: **reply** al thread 0.2.0 esistente (variant ~80 parole, è una release additiva). Per forum DEVONtechnologies: standalone post (~190 parole).
-2. **Picking up un item della roadmap 0.4.0+** — più trattabile probabilmente HTTP transport (ADR-006, ~2 settimane).
-3. **Issue #63**: integration test fleshing-out per bulk_apply drift round-trip (richiede DT live + conftest helpers).
+1. **Verificare Issue #63 live**: con DT4 + fixtures-dt-mcp aperto, `uv run pytest tests/integration/test_undo_bulk_apply_drift_live.py -m integration -v`. Se verde, chiudere issue.
+2. **Postare l'annuncio v0.3.0** — bozza completa già in `docs/announcements/0.3.0.md`. Per r/devonthink: **reply** al thread 0.2.0 esistente (variant ~80 parole, è una release additiva). Per forum DEVONtechnologies: standalone post (~190 parole).
+3. **HTTP transport (target 0.4.0)** — ora che ADR-006 è Accepted: scaffold del transport (uvicorn + streamable-http), middleware di consent/scope check, OAuth callback design (loopback localhost vs Cloudflare Tunnel — open question da REVIEW_ADR §3 #12), `ConsentStore` SQLite, integration test multi-client. ~2 settimane.
 
 ---
 
