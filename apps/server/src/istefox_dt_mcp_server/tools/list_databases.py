@@ -9,6 +9,7 @@ from istefox_dt_mcp_schemas.tools import (
     ListDatabasesOutput,
 )
 
+from ..auth.scope import Scope
 from ._common import safe_call
 
 if TYPE_CHECKING:
@@ -28,4 +29,5 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             deps=deps,
             operation=deps.adapter.list_databases,
             output_factory=ListDatabasesOutput,
+            required_scope=Scope.READ,
         )

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from istefox_dt_mcp_schemas.tools import FindRelatedInput, FindRelatedOutput
 
+from ..auth.scope import Scope
 from ._common import safe_call
 
 if TYPE_CHECKING:
@@ -27,4 +28,5 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             deps=deps,
             operation=op,
             output_factory=FindRelatedOutput,
+            required_scope=Scope.READ,
         )

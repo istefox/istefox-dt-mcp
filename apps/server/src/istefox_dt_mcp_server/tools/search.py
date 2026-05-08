@@ -22,6 +22,7 @@ from istefox_dt_mcp_schemas.common import SearchResult
 from istefox_dt_mcp_schemas.rag import RAGFilter, RAGHit
 from istefox_dt_mcp_schemas.tools import SearchInput, SearchOutput
 
+from ..auth.scope import Scope
 from ._common import safe_call
 
 if TYPE_CHECKING:
@@ -156,6 +157,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             deps=deps,
             operation=op,
             output_factory=SearchOutput,
+            required_scope=Scope.READ,
         )
 
 

@@ -35,6 +35,7 @@ from istefox_dt_mcp_schemas.tools import (
     BulkOpOutcome,
 )
 
+from ..auth.scope import Scope
 from ._common import safe_call, validate_confirm_token
 
 if TYPE_CHECKING:
@@ -199,6 +200,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             operation=op,
             output_factory=BulkApplyOutput,
             before_state=before_state,
+            required_scope=Scope.WRITE,
         )
         # Inject the move snapshots collected during op() into the
         # audit record. The audit table is append-only; the trick is

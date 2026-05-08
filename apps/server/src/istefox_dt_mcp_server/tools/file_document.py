@@ -33,6 +33,7 @@ from istefox_dt_mcp_schemas.tools import (
     FileDocumentResult,
 )
 
+from ..auth.scope import Scope
 from ._common import safe_call, validate_confirm_token, validate_destination_path
 
 if TYPE_CHECKING:
@@ -68,6 +69,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                 deps=deps,
                 operation=fail_op,
                 output_factory=FileDocumentOutput,
+                required_scope=Scope.WRITE,
             )
 
         before_state = {
@@ -125,6 +127,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             operation=op,
             output_factory=FileDocumentOutput,
             before_state=before_state,
+            required_scope=Scope.WRITE,
         )
         # Echo the audit_id back as preview_token so the client can
         # reuse it on the apply call.

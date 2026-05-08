@@ -36,11 +36,22 @@ from istefox_dt_mcp_adapter.errors import (
 from istefox_dt_mcp_schemas.common import Envelope
 
 from ..audit import timer
+from ..auth.scope import (
+    InsufficientScopeError,
+    Scope,
+    current_context,
+    current_scopes,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from ..deps import Deps
+
+
+# Error code surfaced in the envelope when the principal is missing
+# the scope a tool requires. Matches ADR-006 §"Errori strutturati".
+OAUTH_INSUFFICIENT_SCOPE = "OAUTH_INSUFFICIENT_SCOPE"
 
 
 # Preview tokens expire after 5 minutes (UX-driven: enough time for
@@ -181,6 +192,7 @@ async def safe_call[T, OutT: Envelope[Any]](
     operation: Callable[[], Awaitable[T]],
     output_factory: Callable[..., OutT],
     before_state: dict[str, Any] | None = None,
+    required_scope: Scope | None = None,
 ) -> OutT:
     """Run `operation`, capture errors, persist audit, return envelope.
 
@@ -193,6 +205,13 @@ async def safe_call[T, OutT: Envelope[Any]](
     `before_state` is opt-in for write tools that want to record a
     snapshot for selective undo (W7+: file_document, bulk_apply).
     The audit log persists it verbatim — keep it small and JSON-safe.
+
+    `required_scope` (0.4.0+, ADR-006): if set, the tool requires the
+    principal to hold this scope. The check runs *before* the operation,
+    so unauthorized callers don't trigger any DT side-effects. The
+    audit log records the failed attempt with `OAUTH_INSUFFICIENT_SCOPE`.
+    Stdio default grants all scopes (single-user local trust); HTTP
+    enforces per request via the scope middleware.
     """
     request_id = str(uuid4())
     structlog.contextvars.bind_contextvars(
@@ -202,9 +221,78 @@ async def safe_call[T, OutT: Envelope[Any]](
     try:
         log.debug("tool_call_started", input_summary=_summarize_input(input_data))
 
+        # Scope gate: short-circuit before running the operation. The
+        # audit entry still gets written so the failed attempt is
+        # auditable; before_state is preserved verbatim.
+        if required_scope is not None and required_scope not in current_scopes():
+            ctx = current_context()
+            principal = ctx.principal_id if ctx is not None else None
+            granted = sorted(s.value for s in current_scopes())
+            audit_id = deps.audit.append(
+                tool_name=tool_name,
+                input_data=input_data,
+                output_data=None,
+                duration_ms=0.0,
+                error_code=OAUTH_INSUFFICIENT_SCOPE,
+                before_state=before_state,
+            )
+            structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+            log.warning(
+                "tool_scope_denied",
+                required_scope=required_scope.value,
+                granted_scopes=granted,
+                principal=principal,
+            )
+            return output_factory(
+                success=False,
+                data=None,
+                audit_id=audit_id,
+                error_code=OAUTH_INSUFFICIENT_SCOPE,
+                error_message=(
+                    f"Il tool '{tool_name}' richiede lo scope "
+                    f"'{required_scope.value}'."
+                ),
+                recovery_hint=(
+                    f"Riesegui il consent flow concedendo lo scope "
+                    f"'{required_scope.value}' al client."
+                ),
+            )
+
         with timer() as t:
             try:
                 data = await operation()
+            except InsufficientScopeError as e:
+                # An operation that itself raised the scope error (rare
+                # — usually the gate above catches it). Same envelope.
+                audit_id = deps.audit.append(
+                    tool_name=tool_name,
+                    input_data=input_data,
+                    output_data=None,
+                    duration_ms=t.duration_ms,
+                    error_code=OAUTH_INSUFFICIENT_SCOPE,
+                    before_state=before_state,
+                )
+                structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+                log.warning(
+                    "tool_scope_denied_inline",
+                    required_scope=e.required.value,
+                    granted_scopes=sorted(s.value for s in e.granted),
+                    principal=e.principal_id,
+                )
+                return output_factory(
+                    success=False,
+                    data=None,
+                    audit_id=audit_id,
+                    error_code=OAUTH_INSUFFICIENT_SCOPE,
+                    error_message=(
+                        f"Il tool '{tool_name}' richiede lo scope "
+                        f"'{e.required.value}'."
+                    ),
+                    recovery_hint=(
+                        f"Riesegui il consent flow concedendo lo scope "
+                        f"'{e.required.value}' al client."
+                    ),
+                )
             except AdapterError as e:
                 audit_id = deps.audit.append(
                     tool_name=tool_name,

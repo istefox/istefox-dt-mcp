@@ -322,6 +322,7 @@ async def summarize_topic_op(
 
 def register(mcp: FastMCP, deps: Deps) -> None:
     """Wire the summarize_topic MCP tool to the FastMCP server."""
+    from ..auth.scope import Scope
     from ._common import safe_call
 
     @mcp.tool()
@@ -337,4 +338,5 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             deps=deps,
             operation=op,
             output_factory=SummarizeTopicOutput,
+            required_scope=Scope.READ,
         )

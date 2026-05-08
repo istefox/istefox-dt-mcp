@@ -24,6 +24,7 @@ from istefox_dt_mcp_schemas.tools import (
     Citation,
 )
 
+from ..auth.scope import Scope
 from ._common import safe_call
 
 if TYPE_CHECKING:
@@ -65,6 +66,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             deps=deps,
             operation=op,
             output_factory=AskDatabaseOutput,
+            required_scope=Scope.READ,
         )
 
 

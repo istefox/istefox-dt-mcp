@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from fastmcp import FastMCP
 
+from .auth.middleware import ScopeMiddleware
 from .deps import build_default_deps
 from .tools import ask_database as tool_ask_database
 from .tools import bulk_apply as tool_bulk_apply
@@ -47,6 +48,12 @@ def build_server(deps: Deps | None = None) -> FastMCP:
     deps = deps or build_default_deps()
 
     mcp = FastMCP(name=SERVER_NAME, instructions=SERVER_INSTRUCTIONS)
+
+    # Scope middleware (0.4.0 phase 2): populates the per-request scope
+    # context. On stdio it grants ALL_SCOPES to a synthetic local
+    # principal; on HTTP it reads the X-Istefox-Scope testing header
+    # (phase 4 swaps this for OAuth bearer-token validation).
+    mcp.add_middleware(ScopeMiddleware())
 
     tool_list_databases.register(mcp, deps)
     tool_search.register(mcp, deps)
