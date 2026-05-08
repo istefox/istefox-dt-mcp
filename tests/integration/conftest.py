@@ -201,9 +201,10 @@ async def fixtures_db_inbox_records(
             "`uv run python scripts/setup_test_database.py` and open the DB"
         )
 
-    # Use a broad term that won't match any specific record but will
-    # surface them via location filtering in a follow-up step. Simpler:
-    # search by each known name from the manifest.
+    # Search by each known name from the manifest. Tolerant to:
+    # - DT4 returning location with a trailing slash (`/Inbox/` not `/Inbox`)
+    # - records that previous test runs may have moved out of /Inbox
+    #   (we only require ≥3 to *currently* live there, not all 4).
     target_names = [
         "Sample PDF Invoice 2025",
         "Sample RTF Memo",
@@ -213,11 +214,10 @@ async def fixtures_db_inbox_records(
     found: list[Any] = []
     for name in target_names:
         hits = await real_adapter.search(name, databases=[db_name], max_results=5)
-        # Match exact name + /Inbox location (the manifest contract).
         for hit in hits:
             if hit.name == name:
                 rec = await real_adapter.get_record(hit.uuid)
-                if rec.location == "/Inbox":
+                if rec.location.rstrip("/") == "/Inbox":
                     found.append(rec)
                     break
 
