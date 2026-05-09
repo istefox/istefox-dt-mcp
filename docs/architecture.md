@@ -1,40 +1,62 @@
 # Architecture overview
 
-Vista corrente dell'architettura **dopo W1-W2**, allineata agli ADR consolidati.
+Vista corrente dell'architettura, allineata agli ADR consolidati e
+all'implementazione di 0.4.0 (HTTP transport + OAuth PKCE multi-device).
 Riferimento storico: [`ARCH-BRIEF-DT-MCP.md`](../ARCH-BRIEF-DT-MCP.md), [`docs/adr/REVIEW_ADR.md`](adr/REVIEW_ADR.md).
 
 ---
 
-## Vista a layer (post-review)
+## Vista a layer (0.4.0)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Tier 1 — Client AI                                           │
-│ Claude Desktop (stdio)                                       │
-│ HTTP/OAuth → v2 (rinviato)                                   │
+│ Claude Desktop (stdio)  ─┐                                   │
+│ Claude.ai Web/mobile    ─┤── via Cloudflare Tunnel + OAuth   │
+│ httpx/curl scripts      ─┘                                   │
 └────────────────────┬─────────────────────────────────────────┘
-                     │ JSON-RPC 2.0 (stdio)
+                     │
+                     │  JSON-RPC 2.0 (stdio)
+                     │  oppure HTTPS → Tunnel → HTTP /mcp/
 ┌────────────────────┴─────────────────────────────────────────┐
 │ Tier 2 — Transport                                           │
-│  stdio (FastMCP run) — solo v1                               │
+│  stdio (FastMCP run)         — Claude Desktop default       │
+│  streamable-http (uvicorn)   — multi-device (--transport http)│
+│   ├─ /mcp/         JSON-RPC + SSE                            │
+│   ├─ /oauth/authorize  GET  consent UI (Jinja2)              │
+│   ├─ /oauth/consent    POST mint auth code + redirect        │
+│   └─ /oauth/token      POST PKCE verify → JWT bearer         │
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
-│ Tier 3 — MCP Capabilities                                    │
-│  Tools registrati: list_databases, search, find_related      │
-│  (ask_database, file_document → schema pronto, impl W5/W7)   │
+│ Tier 3 — Auth (0.4.0)                                        │
+│  ScopeMiddleware (FastMCP middleware)                        │
+│   ├─ stdio:    principal=local-stdio, ALL_SCOPES             │
+│   └─ HTTP:     Authorization: Bearer <jwt> → claims          │
+│                fallback: X-Istefox-Scope CSV (testing)       │
+│  JWTIssuer (HS256/joserfc, 32B HMAC, oauth_secret 0600)      │
+│  AuthCodeStore (SQLite, one-shot, 10min TTL)                 │
+│  ConsentStore (SQLite, per-DB authorization, ADR-006)        │
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
-│ Tier 4 — Service layer (apps/server)                         │
-│  - safe_call wrapper (audit + i18n + duration + envelope)    │
+│ Tier 4 — MCP Capabilities                                    │
+│  Tools registrati (decorati con required_scope):             │
+│   READ:  list_databases · search · find_related ·            │
+│          ask_database · summarize_topic                      │
+│   WRITE: file_document · bulk_apply                          │
+└────────────────────┬─────────────────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────────────────┐
+│ Tier 5 — Service layer (apps/server)                         │
+│  - safe_call wrapper (scope gate + audit + i18n + envelope)  │
 │  - structured logging (structlog → stderr JSON)              │
 │  - audit log SQLite append-only                              │
 │  - i18n (errori italiano via locales/it.toml)                │
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
-│ Tier 5 — Bridge adapter (libs/adapter)                       │
+│ Tier 6 — Bridge adapter (libs/adapter)                       │
 │  - DEVONthinkAdapter ABC (multi-bridge ready)                │
 │  - JXAAdapter: pool semaphore + retry + timeout              │
 │  - SQLite WAL cache con TTL per categoria                    │
@@ -43,10 +65,62 @@ Riferimento storico: [`ARCH-BRIEF-DT-MCP.md`](../ARCH-BRIEF-DT-MCP.md), [`docs/a
 └────────────────────┬─────────────────────────────────────────┘
                      │ osascript -l JavaScript
 ┌────────────────────┴─────────────────────────────────────────┐
-│ Tier 6 — Target                                              │
+│ Tier 7 — Target                                              │
 │  DEVONthink 4 (macOS, locale, in esecuzione)                 │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## OAuth 2.1 + PKCE flow (0.4.0)
+
+```
+   Client                     istefox-dt-mcp HTTP                 User-agent
+   ──────                     ────────────────────                 ──────────
+     │                                  │                              │
+     │ 1. compute code_verifier         │                              │
+     │    + code_challenge (S256)       │                              │
+     │                                  │                              │
+     │ 2. redirect to                   │                              │
+     │    /oauth/authorize ─────────────┤                              │
+     │    ?client_id=...                │                              │
+     │    &redirect_uri=...             │                              │
+     │    &code_challenge=...           │                              │
+     │    &code_challenge_method=S256   │                              │
+     │    &scope=dt:read+dt:write       │                              │
+     │    &state=xyz                    │ 3. GET → render consent_ui   │
+     │                                  ├─────────────────────────────►│
+     │                                  │                              │
+     │                                  │ 4. user ticks scopes + DBs,  │
+     │                                  │    submits POST /oauth/consent│
+     │                                  ◄──────────────────────────────┤
+     │                                  │                              │
+     │                                  │ 5. ConsentStore.authorize    │
+     │                                  │    AuthCodeStore.issue       │
+     │                                  │                              │
+     │ 6. ◄──── 302 redirect ───────────┤                              │
+     │      ?code=<auth_code>&state=xyz │                              │
+     │                                  │                              │
+     │ 7. POST /oauth/token ────────────┤                              │
+     │    grant_type=authorization_code │                              │
+     │    code=<auth_code>              │ 8. AuthCodeStore.consume     │
+     │    code_verifier=<...>           │    verify_pkce_s256          │
+     │                                  │    JWTIssuer.issue           │
+     │ 9. ◄──── 200 JSON ───────────────┤                              │
+     │      {access_token: <jwt>, ...}  │                              │
+     │                                  │                              │
+     │ 10. POST /mcp/                   │                              │
+     │     Authorization: Bearer <jwt> ─┤                              │
+     │                                  │ 11. ScopeMiddleware verify   │
+     │                                  │     RequestContext set       │
+     │                                  │     Tool runs scope-gated    │
+     │ 12. ◄── MCP envelope ────────────┤                              │
+```
+
+The token bakes in the granted scopes (`dt:read`/`dt:write`/`dt:admin`).
+Database-scoping is **outside the token** (in ConsentStore) so newly
+created databases trigger `RECONSENT_REQUIRED` instead of getting a
+free pass — see ADR-006.
 
 ---
 

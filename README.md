@@ -116,9 +116,47 @@ The connector is designed **privacy-first** and **local-only**:
 | **0.1.0** (May 2026) | 6 MCP tools, audit + undo, `.mcpb` bundle, BM25-only retrieval by default | — |
 | **0.2.0** (May 2026) | 7th tool `summarize_topic`, 3-state drift detection on `file_document` undo, real-data VCR cassettes from a fixture DT4 DB | [ADR-005](docs/adr/0005-test-strategy-4-tier.md) |
 | **0.3.0** (May 2026) | Per-op 3-state drift detection on `bulk_apply` undo, one-shot release pipeline (auto-trigger MCP Registry publish) | — |
-| **0.4.0+** (Q4 2026) | HTTP transport + OAuth multi-device, `create_smart_rule`, RAG benchmark cross-corpus + flip default embedding model | [ADR-004](docs/adr/0004-mvp-tool-scope.md), [ADR-008](docs/adr/0008-embedding-model-selection.md) |
+| **0.4.0** (May 2026) | HTTP transport + OAuth 2.1 PKCE multi-device, scope enforcement (3 scope), per-DB consent (ConsentStore) | [ADR-006](docs/adr/0006-oauth-scope-model.md) |
+| **0.5.0+** (Q4 2026) | `create_smart_rule`, RAG benchmark cross-corpus + flip default embedding model, token refresh + key rotation | [ADR-004](docs/adr/0004-mvp-tool-scope.md), [ADR-008](docs/adr/0008-embedding-model-selection.md) |
 
 Full backlog in [`handoff.md`](handoff.md).
+
+---
+
+## Remote access via HTTP + OAuth (0.4.0)
+
+Default deployment is **stdio** (Claude Desktop, single-user, local trust). For multi-device remote access (Claude.ai Web, mobile, etc.), 0.4.0 ships an **HTTP transport with OAuth 2.1 + PKCE**.
+
+**3-step setup:**
+
+1. **Start the server in HTTP mode** (loopback-only is the default — never expose directly to the public internet without TLS at the edge):
+
+   ```bash
+   uv run istefox-dt-mcp serve --transport http --host 127.0.0.1 --port 3000
+   ```
+
+2. **Front it with a TLS-terminating tunnel.** Cloudflare Tunnel is recommended (zero-config, no inbound port to forward):
+
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:3000 --hostname dt-mcp.example.com
+   ```
+
+3. **First connection** — the client (Claude.ai Web, mobile, …) walks the user through the OAuth consent UI:
+
+   - Client redirects user to `https://dt-mcp.example.com/oauth/authorize?...`
+   - User picks scopes (`dt:read` / `dt:write` / `dt:admin`) + databases to authorize
+   - Server mints an authorization code, redirects back with `?code=...`
+   - Client exchanges the code for a Bearer JWT at `/oauth/token`
+   - All subsequent MCP calls use `Authorization: Bearer <jwt>`
+
+Tokens last 1 hour. Database creations *after* consent surface as `RECONSENT_REQUIRED` errors — the user re-authorizes the new database via the consent UI.
+
+**Security model** (see [ADR-006](docs/adr/0006-oauth-scope-model.md)):
+- 3 OAuth scopes (read / write / admin) — granular database scoping is **outside** the token (server-side ConsentStore), so newly-created DBs never get a free pass.
+- HMAC HS256 signing with a 32-byte secret persisted at `~/.local/share/istefox-dt-mcp/oauth_secret` (mode 0600). To rotate, delete the file + restart — all outstanding tokens become invalid.
+- Authorization codes are one-shot (10-min TTL) — replay attacks fail closed.
+
+stdio is unaffected: Claude Desktop continues to work without auth, exactly as before.
 
 ---
 
@@ -138,9 +176,9 @@ For anything not listed: `uv run istefox-dt-mcp doctor` produces a full diagnost
 
 ## Status
 
-**0.3.0 current release** (May 2026): 7 MCP tools end-to-end, 3-state drift detection on both `file_document` and `bulk_apply` undo paths, `.mcpb` bundle distributable, MCP Registry entry auto-published on tag push. **222 unit + contract tests** green, mypy clean across 37 source files. CI on Ubuntu (lint + mypy + unit + contract) and macOS-14 (import + bundle smoke + nightly).
+**0.4.0 current release** (May 2026): all 7 tools available over both **stdio** (Claude Desktop) and **streamable HTTP** (multi-device behind Cloudflare Tunnel) with **OAuth 2.1 + PKCE** authentication, 3-scope authorization model (`dt:read`/`dt:write`/`dt:admin`), per-database consent persisted server-side (ConsentStore). **294 unit + contract tests** green plus 11 integration tests opt-in. mypy clean, smoke E2E PASS on 7 steps including the OAuth flow surface.
 
-Previous milestones: **0.2.0** (May 2026) — `summarize_topic` tool + 3-state drift on `file_document` + real-data VCR cassettes via `record-cassette` CLI. **0.1.0** (May 2026) — first public release, 6 tools, BM25-only retrieval.
+Previous milestones: **0.3.0** (May 2026) — per-op 3-state drift detection on `bulk_apply` undo + auto-trigger MCP Registry publish. **0.2.0** (May 2026) — `summarize_topic` tool + 3-state drift on `file_document` + real-data VCR cassettes via `record-cassette` CLI. **0.1.0** (May 2026) — first public release, 6 tools, BM25-only retrieval.
 
 ---
 

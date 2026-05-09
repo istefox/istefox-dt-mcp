@@ -3,6 +3,84 @@
 Tutti i cambiamenti rilevanti a `istefox-dt-mcp` sono documentati qui.
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [SemVer](https://semver.org/lang/it/).
 
+## [0.4.0] — 2026-05-09 — HTTP transport + OAuth 2.1 PKCE multi-device
+
+Quarta release: il server può ora servire client remoti (Claude.ai Web,
+mobile, …) tramite Streamable HTTP transport con autenticazione OAuth
+2.1 + PKCE. stdio resta default per Claude Desktop (single-user, local
+trust). Fasizzata in 5 PR: foundation HTTP, scope plumbing, ConsentStore,
+OAuth flow + consent UI, integration tests + release.
+
+### Added
+- **HTTP transport** (`--transport http --host --port`) via FastMCP
+  streamable-HTTP + uvicorn. stdio invariato per Claude Desktop.
+- **OAuth 2.1 + PKCE flow**: `GET /oauth/authorize` (consent UI HTML),
+  `POST /oauth/consent` (mint authorization code + redirect),
+  `POST /oauth/token` (PKCE verifier check + bearer JWT). `Authorization:
+  Bearer <jwt>` validato dalla `ScopeMiddleware`.
+- **3 OAuth scope** (`dt:read`, `dt:write`, `dt:admin`) per ADR-006:
+  read tool richiedono `dt:read`, write tool (`file_document`,
+  `bulk_apply`) richiedono `dt:write`. Su HTTP senza scope sufficienti
+  → envelope `error_code=OAUTH_INSUFFICIENT_SCOPE`.
+- **ConsentStore**: SQLite store persistente (`<data_dir>/consent.sqlite`)
+  delle autorizzazioni per-database. `list_databases` filtra per
+  principal; write tool fanno pre-flight `check_or_raise` per il DB
+  del record. Nuovo errore `RECONSENT_REQUIRED` con messaggio italiano.
+- **Consent UI** (`auth/consent_ui.py`): pagina HTML minimale (Jinja2
+  inline, no JS, no asset esterni) con scope toggle + database
+  checkbox. Funziona in qualsiasi browser.
+- **JWT issuer** (`auth/oauth.py`): HS256 via joserfc. Secret 32-byte
+  in `<data_dir>/oauth_secret` (mode 0600, lazy generato). Token TTL
+  1h, claims `iss`/`aud`/`sub`/`scope`/`exp`/`iat`/`jti`.
+- **Auth code store** (`auth/oauth.py`): SQLite, one-shot consume,
+  TTL 10min. Replay del code → `invalid_grant`.
+- **Record schema**: nuovo campo opzionale `database_uuid: str | None`,
+  popolato da `get_record.js`. Usato da ConsentStore per il consent
+  check sui write tool senza extra adapter call.
+- **Smoke E2E Step 6** (HTTP transport lifecycle) e **Step 7**
+  (`/oauth/authorize` + `/oauth/token` surface): smoke ora 7/7.
+- **Integration test live** (`test_http_transport_oauth_live.py`):
+  full PKCE round-trip su uvicorn reale + tool call con bearer.
+
+### Changed
+- `Deps` esteso con `consent: ConsentStore`, `jwt_issuer: JWTIssuer`,
+  `auth_codes: AuthCodeStore`. Il refactor è breaking solo per chi
+  istanziava `Deps` direttamente; `build_default_deps` provisiona
+  tutto automaticamente.
+- `safe_call` accetta `required_scope: Scope | None` e fa il gate
+  prima di eseguire l'operazione. Stdio sempre permissivo (single-user
+  local trust); HTTP enforce stretto.
+- `ScopeMiddleware` ora pacchetto OAuth-aware: estrae scope/principal
+  da `Authorization: Bearer <jwt>` (production) o da `X-Istefox-Scope`
+  (testing fallback).
+- `authlib`, `joserfc`, `jinja2`, `uvicorn` sono ora dipendenze
+  required (prima erano nell'extra `[http]`/`[http-oauth]`).
+
+### Issue closed
+- **#63** — integration test per `bulk_apply` undo drift live: PASSED
+  in 10.85s (commit `2c2eeea` + fix-up `6a0599c` per trailing-slash
+  tolerance su `/Inbox/`).
+
+### Notes & limitations
+- v1 single-user: ogni flow PKCE produce un token con `sub=oauth-user`.
+  Multi-utente reale richiede un layer di login a monte (out of scope
+  v1, NG1 in spec).
+- Token signing è HMAC HS256 con un singolo secret persistente. La
+  rotazione è manuale (cancella `oauth_secret` e riavvia → tutti i
+  token in volo invalidi).
+- TLS termina al tunnel di edge (Cloudflare Tunnel raccomandato).
+  Il server non espone HTTPS direttamente: bind localhost-only di default.
+- Database creati in DT4 dopo il consent → primo accesso ritorna
+  `RECONSENT_REQUIRED`; l'utente deve riautorizzare.
+
+### Planned for 0.5.0+
+- RAG benchmark cross-corpus + flip default model (ADR-008)
+- `create_smart_rule` tool (DEFERRED, issue #47)
+- Token refresh + key rotation
+- Multi-tenancy / per-user ACL (oltre v1)
+
+---
+
 ## [0.3.0] — 2026-05-06 — `bulk_apply` undo drift detection + auto-trigger registry publish
 
 Terza release: estensione del classifier 3-state al path `bulk_apply` undo
