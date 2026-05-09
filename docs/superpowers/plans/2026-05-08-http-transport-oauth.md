@@ -102,7 +102,7 @@ Each phase = one PR. Tasks within a phase are sequential. Phases are gated by re
 - [x] Phase 1 — HTTP transport foundation (`860225c`, 2026-05-08, smoke 6/6 PASS)
 - [x] Phase 2 — Scope enforcement plumbing (`3dc3df9`, 2026-05-08, 239 tests pass)
 - [x] Phase 3 — ConsentStore + per-DB authorization (`b65c5a1`, 2026-05-08, 259 tests pass)
-- [ ] Phase 4 — OAuth flow + consent UI
+- [x] Phase 4 — OAuth 2.1 + PKCE consent flow (`0c1364d`, 2026-05-09, 294 tests pass)
 - [ ] Phase 5 — Integration tests + release
 
 Update `handoff.md` at end of each phase. Each PR closes its phase tracking item here.
