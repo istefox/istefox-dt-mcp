@@ -192,7 +192,7 @@ def verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
     """
     try:
         computed = create_s256_code_challenge(code_verifier)
-    except Exception:  # noqa: BLE001 — invalid utf-8, etc.
+    except Exception:
         return False
     return bool(computed == code_challenge)
 

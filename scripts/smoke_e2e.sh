@@ -413,6 +413,108 @@ SERVER_PID=""
 echo "   ok: HTTP initialize response received, server exited cleanly (port ${HTTP_PORT})"
 
 # ---------------------------------------------------------------------------
+# Step 7 — OAuth flow surface (0.4.0 phase 4).
+#
+# Spins up the HTTP server, calls /oauth/authorize and /oauth/token to
+# verify the PKCE endpoints are mounted and respond with the expected
+# shapes (HTML 200 / OAuth 2.1 invalid_grant JSON). A full PKCE
+# round-trip with token issuance is covered by the integration test
+# `test_pkce_flow_end_to_end_live` — this step is the lighter
+# liveness probe suitable for the pre-tag gate.
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=> Step 7 — OAuth endpoints (authorize + token surface)"
+
+OAUTH_PORT="$(python3 -c "import random; print(random.randint(20000, 29999))")"
+OAUTH_LOG="${TMP_DIR}/oauth-server.log"
+
+uv run --directory "${PROJECT_ROOT}" istefox-dt-mcp serve \
+    --transport http --host 127.0.0.1 --port "${OAUTH_PORT}" \
+    >"${OAUTH_LOG}" 2>&1 &
+SERVER_PID=$!
+
+OAUTH_READY=""
+for _ in $(seq 1 20); do
+    if grep -q "Uvicorn running on" "${OAUTH_LOG}" 2>/dev/null; then
+        OAUTH_READY=1
+        break
+    fi
+    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+        echo "   FAIL: HTTP server died before listening" >&2
+        cat "${OAUTH_LOG}" >&2 || true
+        echo "[FAIL] smoke fail (step 7)"
+        exit 4
+    fi
+    sleep 0.25
+done
+if [[ -z "${OAUTH_READY}" ]]; then
+    echo "   FAIL: HTTP server didn't bind for OAuth probe" >&2
+    cat "${OAUTH_LOG}" >&2 || true
+    echo "[FAIL] smoke fail (step 7)"
+    exit 4
+fi
+
+# Build a valid PKCE challenge so /oauth/authorize doesn't 400.
+PKCE_CHALLENGE="$(uv run --directory "${PROJECT_ROOT}" python -c \
+    'from authlib.oauth2.rfc7636 import create_s256_code_challenge; print(create_s256_code_challenge("v" * 64))')"
+
+OAUTH_AUTH_RESP="${TMP_DIR}/oauth-authorize.html"
+set +e
+OAUTH_AUTH_CODE="$(curl -s -o "${OAUTH_AUTH_RESP}" -w "%{http_code}" --max-time 5 \
+    "http://127.0.0.1:${OAUTH_PORT}/oauth/authorize?client_id=smoke&redirect_uri=http://127.0.0.1:9999/cb&response_type=code&code_challenge=${PKCE_CHALLENGE}&code_challenge_method=S256&scope=dt:read&state=s")"
+set -e
+
+if [[ "${OAUTH_AUTH_CODE}" != "200" ]]; then
+    echo "   FAIL: /oauth/authorize returned ${OAUTH_AUTH_CODE}, expected 200" >&2
+    cat "${OAUTH_AUTH_RESP}" >&2 || true
+    kill -TERM "${SERVER_PID}" 2>/dev/null || true
+    echo "[FAIL] smoke fail (step 7)"
+    exit 4
+fi
+if ! grep -q "Approve" "${OAUTH_AUTH_RESP}"; then
+    echo "   FAIL: consent UI missing Approve button" >&2
+    head -c 400 "${OAUTH_AUTH_RESP}" >&2 || true
+    kill -TERM "${SERVER_PID}" 2>/dev/null || true
+    echo "[FAIL] smoke fail (step 7)"
+    exit 4
+fi
+
+# /oauth/token with bogus code must return JSON invalid_grant per OAuth 2.1.
+OAUTH_TOK_RESP="${TMP_DIR}/oauth-token.json"
+set +e
+OAUTH_TOK_CODE="$(curl -s -o "${OAUTH_TOK_RESP}" -w "%{http_code}" --max-time 5 \
+    -X POST "http://127.0.0.1:${OAUTH_PORT}/oauth/token" \
+    -d "grant_type=authorization_code&code=nope&code_verifier=vvvvvvvv")"
+set -e
+
+if [[ "${OAUTH_TOK_CODE}" != "400" ]]; then
+    echo "   FAIL: /oauth/token expected 400 for bogus code, got ${OAUTH_TOK_CODE}" >&2
+    cat "${OAUTH_TOK_RESP}" >&2 || true
+    kill -TERM "${SERVER_PID}" 2>/dev/null || true
+    echo "[FAIL] smoke fail (step 7)"
+    exit 4
+fi
+if ! grep -q '"error":"invalid_grant"' "${OAUTH_TOK_RESP}"; then
+    echo "   FAIL: /oauth/token didn't return invalid_grant envelope" >&2
+    cat "${OAUTH_TOK_RESP}" >&2 || true
+    kill -TERM "${SERVER_PID}" 2>/dev/null || true
+    echo "[FAIL] smoke fail (step 7)"
+    exit 4
+fi
+
+kill -TERM "${SERVER_PID}" 2>/dev/null || true
+for _ in $(seq 1 8); do
+    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+        break
+    fi
+    sleep 0.25
+done
+SERVER_PID=""
+
+echo "   ok: /oauth/authorize 200 + consent UI; /oauth/token invalid_grant on bad code"
+
+# ---------------------------------------------------------------------------
 # Final verdict.
 # ---------------------------------------------------------------------------
 
