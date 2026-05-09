@@ -20,6 +20,7 @@ from istefox_dt_mcp_adapter.contract import DEVONthinkAdapter
 from istefox_dt_mcp_adapter.rag import NoopRAGProvider
 from istefox_dt_mcp_server.audit import AuditLog
 from istefox_dt_mcp_server.auth.consent import ConsentStore
+from istefox_dt_mcp_server.auth.oauth import AuthCodeStore, JWTIssuer, OAuthSecret
 from istefox_dt_mcp_server.deps import Deps
 from istefox_dt_mcp_server.i18n import Translator
 
@@ -57,12 +58,24 @@ def consent_store(tmp_data_dir: Path) -> ConsentStore:
 
 
 @pytest.fixture
+def jwt_issuer(tmp_data_dir: Path) -> JWTIssuer:
+    return JWTIssuer(OAuthSecret(tmp_data_dir / "oauth_secret"))
+
+
+@pytest.fixture
+def auth_code_store(tmp_data_dir: Path) -> AuthCodeStore:
+    return AuthCodeStore(tmp_data_dir / "auth_codes.sqlite")
+
+
+@pytest.fixture
 def deps(
     mock_adapter: AsyncMock,
     audit_log: AuditLog,
     translator: Translator,
     cache: SQLiteCache,
     consent_store: ConsentStore,
+    jwt_issuer: JWTIssuer,
+    auth_code_store: AuthCodeStore,
 ) -> Deps:
     return Deps(
         adapter=mock_adapter,
@@ -71,4 +84,6 @@ def deps(
         cache=cache,
         rag=NoopRAGProvider(),
         consent=consent_store,
+        jwt_issuer=jwt_issuer,
+        auth_codes=auth_code_store,
     )

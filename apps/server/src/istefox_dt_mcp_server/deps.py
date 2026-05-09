@@ -23,6 +23,7 @@ from istefox_dt_mcp_adapter.rag import NoopRAGProvider
 
 from .audit import AuditLog
 from .auth.consent import ConsentStore
+from .auth.oauth import AuthCodeStore, JWTIssuer, OAuthSecret
 from .i18n import Translator
 
 if TYPE_CHECKING:
@@ -43,6 +44,8 @@ class Deps:
     cache: SQLiteCache | None
     rag: RAGProvider
     consent: ConsentStore
+    jwt_issuer: JWTIssuer
+    auth_codes: AuthCodeStore
 
 
 def _build_rag_provider(base: Path) -> RAGProvider:
@@ -100,6 +103,9 @@ def build_default_deps(
     translator = Translator()
     rag = _build_rag_provider(base)
     consent = ConsentStore(base / "consent.sqlite")
+    oauth_secret = OAuthSecret(base / "oauth_secret")
+    jwt_issuer = JWTIssuer(oauth_secret)
+    auth_codes = AuthCodeStore(base / "auth_codes.sqlite")
 
     return Deps(
         adapter=adapter,
@@ -108,4 +114,6 @@ def build_default_deps(
         cache=cache,
         rag=rag,
         consent=consent,
+        jwt_issuer=jwt_issuer,
+        auth_codes=auth_codes,
     )

@@ -16,6 +16,12 @@ dependencies = [
     # HTTP transport (streamable-HTTP server runtime). FastMCP exposes
     # the API; uvicorn is the actual ASGI runner it dispatches to.
     "uvicorn>=0.30",
+    # OAuth 2.1 + PKCE (0.4.0 phase 4): authlib for PKCE verification
+    # primitives, joserfc for JWT signing (authlib.jose is deprecated
+    # toward 2.x), jinja2 for the consent UI HTML rendering.
+    "authlib>=1.3",
+    "joserfc>=1.0",
+    "jinja2>=3.1",
     # Logging / observability
     "structlog>=24.1",
     "opentelemetry-sdk>=1.25",
@@ -23,14 +29,6 @@ dependencies = [
     "istefox-dt-mcp-adapter",
     "istefox-dt-mcp-schemas",
     "istefox-dt-mcp-sidecar",
-]
-
-[project.optional-dependencies]
-# OAuth lands in 0.4.0 phase 4. Until then, HTTP transport runs
-# without auth (anonymous, intended for trusted localhost only).
-http-oauth = [
-    "authlib>=1.3",
-    "jinja2>=3.1",
 ]
 
 [project.scripts]
