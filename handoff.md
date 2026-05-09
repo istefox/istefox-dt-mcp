@@ -7,8 +7,8 @@
 ## Snapshot sessione corrente
 
 - **Data fine**: 2026-05-08
-- **Branch**: `main` @ `0c1364d` (in sync con origin/main); tag `v0.3.0` pushato; **0.4.0 phases 1+2+3+4 shipped, resta solo phase 5 (release)**
-- **Output principale**: **ADR-006 finalizzato + Issue #63 chiusa + 0.4.0 phases 1-4 shipped (HTTP transport + scope plumbing + ConsentStore + OAuth PKCE flow) + smoke 6/6 PASS**.
+- **Branch**: `main` @ `3529cc4` (in sync con origin/main); **tag `v0.4.0` pushato — release 0.4.0 RILASCIATA end-to-end**
+- **Output principale**: **0.4.0 RILASCIATA**: HTTP transport + OAuth 2.1 PKCE multi-device + scope enforcement + ConsentStore + integration tests live + release polish. Tutte 5 fasi del plan complete.
   - `fb5c028` — **ADR-006 OAuth scope model** (Accepted): 3 scope, database-scoping server-side, RECONSENT_REQUIRED.
   - `2c2eeea` + `6a0599c` — **Issue #63 CHIUSA**: integration test PASSED 10.85s live.
   - `c3e8e74` — **0.4.0 spec + plan** in `docs/superpowers/{specs,plans}/2026-05-08-http-transport-oauth*.md`. Lavoro fasato in 5 PR (~2 settimane).
@@ -16,7 +16,10 @@
   - `3dc3df9` — **Phase 2**: scope enforcement plumbing (Scope enum, RequestContext contextvar, ScopeMiddleware, safe_call gate). Tutti i 7 tool decorati con `required_scope` (READ/WRITE). HTTP usa header `X-Istefox-Scope` (testing stub fino a phase 4). 11 nuovi unit test (239 totali).
   - `b65c5a1` — **Phase 3**: ConsentStore SQLite + per-DB authorization. `get_record.js` ritorna `database_uuid`; `list_databases` filtrato; write tools (`file_document`/`bulk_apply`) fanno pre-flight consent check. Nuovo error code `RECONSENT_REQUIRED`. 20 nuovi unit test (259 totali).
   - `0c1364d` — **Phase 4** (sessione 2026-05-09): full OAuth 2.1 + PKCE flow. Nuovi `auth/oauth.py` (OAuthSecret 32B HMAC con perms 0600, JWTIssuer HS256 via joserfc, AuthCodeStore SQLite one-shot, verify_pkce_s256), `auth/consent_ui.py` (Jinja2 inline template), `auth/routes.py` (GET /oauth/authorize, POST /oauth/consent, POST /oauth/token montati via `mcp.custom_route`). `ScopeMiddleware` ora valida `Authorization: Bearer <jwt>` (con `X-Istefox-Scope` come fallback testing). Deps esteso con `jwt_issuer` + `auth_codes`. authlib + joserfc + jinja2 promosse a required deps. Verifica live: `/oauth/authorize` HTTP 200, `/oauth/token` rifiuta codici fasulli con OAuth-spec invalid_grant envelope. 35 nuovi unit/contract test (294 totali).
-  - Smoke E2E PASS — 6/6 step (incluso HTTP transport).
+  - `90ab53d` — **Phase 5 tests**: 3 integration test live (`test_http_transport_oauth_live.py`) — full PKCE round-trip su uvicorn reale verificato PASS. Smoke E2E Step 7 (OAuth surface).
+  - `3529cc4` — **chore: release v0.4.0**: bump `SERVER_VERSION` + `manifest.json` a 0.4.0; CHANGELOG + README + `architecture.md` aggiornati con HTTP/OAuth setup, layer diagram esteso (Tier 2-3 Auth), sequence diagram PKCE.
+  - **Pipeline release end-to-end**: `gh workflow run release.yml -f version=0.4.0` → tag `v0.4.0` (44s) → auto-trigger `publish-registry.yml` (9s) → bundle `istefox-dt-mcp-0.4.0.mcpb` (332 KB, sha256 `a0c6f45e9448e98732d0003d075a4f88d8dcc4886e6cf2b9e4a84aa28d0b7ade`) live su GitHub Releases + MCP Registry mostra v0.4.0.
+  - Smoke E2E PASS — 7/7 step (incluso HTTP + OAuth).
   - PR #41 (`docs/glama-listing-and-cross-link`) chiusa come superseded — il contenuto (Glama badge + cross-link `obsidian-mcp-connector`) era già in main via `7d78269` e `787033e`. Verificato in rebase: branch identico a main dopo conflict resolution.
   - Eliminati 5 stale branches locali; `feat/create-smart-rule` pushato su origin per preservare `ee9317f docs(jxa): empirical discovery of DT4 smart rule scripting` (riferimento per quando Issue #47 sarà sbloccata).
 - **Sessione precedente (2026-05-06)**: **v0.3.0 RILASCIATA** — primo end-to-end test dell'auto-trigger (PR #62) riuscito.
@@ -32,8 +35,8 @@
 ## Stato corrente del progetto
 
 ### Versione live
-- **GitHub Releases**: `v0.3.0` (2026-05-06) — bundle .mcpb 305 KB, sha256 `b54ebeb96dd198cbf60638e25ceac2a3efc6cbe8f8cc665a879f94983ad571f3`
-- **MCP Registry**: `io.github.istefox/dt-mcp` v0.3.0 (registry mostra tutte 0.1.0 + 0.2.0 + 0.3.0)
+- **GitHub Releases**: `v0.4.0` (2026-05-09) — bundle .mcpb 332 KB, sha256 `a0c6f45e9448e98732d0003d075a4f88d8dcc4886e6cf2b9e4a84aa28d0b7ade`
+- **MCP Registry**: `io.github.istefox/dt-mcp` v0.4.0 (registry mostra tutte 0.1.0 + 0.2.0 + 0.3.0 + 0.4.0)
 - **Repo**: pubblico, MIT, solo `istefox` come contributor
 
 ### 0.2.0 — landed e rilasciata
@@ -78,7 +81,7 @@ Follow-up issues aperte: nessuna. (Issue #63 chiusa 2026-05-08 dopo run live ver
 | Item | Stato | Note |
 |---|---|---|
 | **RAG benchmark cross-corpus** | ⏸️ bloccato | Aspetta early adopter (3+ corpus diversi). Criterio per flippare default `bge-m3` (ADR-008). |
-| **HTTP transport + OAuth multi-device (0.4.0)** | 🟡 in flight 4/5 phases | Spec+plan in `docs/superpowers/`. Phase 1 ✅ `860225c`, 2 ✅ `3dc3df9`, 3 ✅ `b65c5a1`, 4 ✅ `0c1364d`. Resta solo phase 5 (integration tests live + release polish). |
+| **HTTP transport + OAuth multi-device (0.4.0)** | ✅ DONE | Tutte 5 fasi shipped. Tag `v0.4.0` live su GitHub + MCP Registry. |
 | **`create_smart_rule`** | ⏸️ DEFERRED | Issue #47 — gap nello SDK DT4. Niente da fare lato nostro finché DT4 non aggiorna la dictionary. |
 | **Integration test per `bulk_apply` undo drift** | ✅ DONE | Issue #63 chiusa 2026-05-08. Test PASS in 10.85s live. |
 | **Fixture stability** | 🟡 noto | `Sample Second PDF` mancante in `fixtures-dt-mcp` (probabilmente da test residuo). Re-seed con `uv run python scripts/setup_test_database.py` quando necessario; il fixture `fixtures_db_inbox_records` skip se <3 record in /Inbox. |
@@ -87,20 +90,18 @@ Follow-up issues aperte: nessuna. (Issue #63 chiusa 2026-05-08 dopo run live ver
 
 ## Cose da fare prossima sessione
 
-1. **Phase 5 — Integration tests + release** (last phase 0.4.0, ~300 LOC):
-   - `tests/integration/test_http_transport_oauth_live.py`: full PKCE round-trip su uvicorn live (start server, GET /authorize, POST /consent, POST /token, MCP call con Bearer, list_databases filter via consent, write tool RECONSENT_REQUIRED su DB non autorizzato).
-   - Smoke E2E Step 7: PKCE flow contro server live + chiamata MCP con bearer.
-   - README: 3-step setup (Cloudflare Tunnel + consent + first connection) + screenshot opzionale del consent UI.
-   - `architecture.md`: aggiornare diagramma con HTTP+OAuth.
-   - CHANGELOG entry 0.4.0; bump version (manifest, SERVER_VERSION); release workflow.
-   - Eventuale ADR-015 se callback URL design (Cloudflare Tunnel vs loopback) richiede ratifica.
-2. **Postare l'annuncio v0.3.0** se si vuole interrompere la roadmap — bozza in `docs/announcements/0.3.0.md`.
+0.4.0 è chiusa. Opzioni in ordine di valore:
 
-Nota fixture: prima di lanciare `tests/integration/test_undo_bulk_apply_drift_live.py` re-seed con `uv run python scripts/setup_test_database.py` per ripristinare i 4 record /Inbox di `fixtures-dt-mcp` (Sample Second PDF è mancante).
+1. **Annuncio 0.4.0** — questa è una release sostanziosa (HTTP transport + OAuth è il salto qualitativo che apre l'uso multi-device). Vale un post: r/devonthink (reply nel thread esistente o nuovo), forum DEVONtechnologies, eventualmente HN/Reddit MCP. Riusare il pattern del 0.3.0 (`docs/announcements/0.3.0.md`).
+2. **Smart rule (#47)** — è ancora DEFERRED. Niente da fare lato nostro finché DT4 non aggiorna lo SDK; se DT4 5.0 esce con la dictionary completa, potrebbe sbloccarsi.
+3. **RAG benchmark cross-corpus (ADR-008)** — bloccato in attesa di early adopter. Sarebbe utile ora che 0.4.0 abilita l'uso remoto (più probabile attirare adopter).
+4. **Token refresh + key rotation (0.5.0)** — l'attuale modello richiede re-consent ogni ora e secret rotation manuale. Gap noto.
+5. **Multi-tenancy reale (post-v1)** — richiede un layer di login a monte; per ora `principal_id=oauth-user` hardcoded.
 
-Nota Phase 3: i write tool ora richiedono che il record abbia `database_uuid` valorizzato. Se DT4 ritorna `null` (record speciali tipo smart group items) la consent check viene bypassata (safe-by-design — niente DB da scope-are). Audit log registra il path con il `database_uuid` quando presente.
-
-Nota Phase 4: stdio invariato (Claude Desktop); HTTP richiede `Authorization: Bearer <jwt>` per i tool call. Il header `X-Istefox-Scope` è ancora supportato come fallback testing-only (utile in script che bypassano il flow PKCE). Secret JWT persistito a `<data_dir>/oauth_secret` con perms 0600; auth codes in `<data_dir>/auth_codes.sqlite`. Default `principal_id=oauth-user` (single-user v1).
+Note operative correnti:
+- **Fixture**: prima di lanciare `test_undo_bulk_apply_drift_live.py` re-seed con `uv run python scripts/setup_test_database.py` (Sample Second PDF è mancante in fixtures-dt-mcp).
+- **OAuth secret rotation**: cancella `~/.local/share/istefox-dt-mcp/oauth_secret` + restart → tutti i token in volo invalidi.
+- **Consent revoca**: `deps.consent.revoke_all(principal_id)` o cancella `consent.sqlite`.
 
 ---
 

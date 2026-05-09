@@ -103,6 +103,6 @@ Each phase = one PR. Tasks within a phase are sequential. Phases are gated by re
 - [x] Phase 2 — Scope enforcement plumbing (`3dc3df9`, 2026-05-08, 239 tests pass)
 - [x] Phase 3 — ConsentStore + per-DB authorization (`b65c5a1`, 2026-05-08, 259 tests pass)
 - [x] Phase 4 — OAuth 2.1 + PKCE consent flow (`0c1364d`, 2026-05-09, 294 tests pass)
-- [ ] Phase 5 — Integration tests + release
+- [x] Phase 5 — Integration tests + release polish (`90ab53d` + `3529cc4`, 2026-05-09, 294 tests pass + 11 integration + smoke 7/7) — release tag pending owner confirmation
 
 Update `handoff.md` at end of each phase. Each PR closes its phase tracking item here.
