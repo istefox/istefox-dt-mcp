@@ -7,10 +7,12 @@
 
 ## Stato corrente
 
-- **Fase**: Pre-implementazione. Brief architetturale v0.1 redatto, in attesa di review Cowork.
-- **Prossimo gate**: ADR finale → scaffold repo → MVP W1-W2.
-- **Prossimo deliverable atteso**: feedback Cowork sul brief.
-- **Bloccanti**: nessuno. Possiamo procedere con scaffold repo e CI in parallelo al review.
+- **Fase**: Produzione. v0.4.0 rilasciata end-to-end (2026-05-09) — HTTP transport + OAuth 2.1 PKCE multi-device + scope enforcement + ConsentStore.
+- **Versione live**: v0.4.0 su GitHub Releases (bundle `.mcpb` 332 KB) + MCP Registry `io.github.istefox/dt-mcp`. Repo pubblico, MIT, solo `istefox` come contributor.
+- **Annuncio 0.4.0**: pubblicato (r/devonthink + forum DEVONtechnologies "AI").
+- **Prossimo deliverable atteso**: nessuno schedulato. Opzioni aperte: token refresh + key rotation (0.5.0), RAG benchmark cross-corpus (ADR-008, bloccato su early adopter), smart rule #47 (DEFERRED, gap SDK DT4).
+- **Bloccanti**: nessuno.
+- **Nota**: lo storico operativo dettagliato vive in `handoff.md` + auto-memory; questo file tiene le decisioni architetturali consolidate e lo stato di alto livello.
 
 ---
 
@@ -30,15 +32,15 @@
 
 ---
 
-## Decisioni aperte (da validare nel review)
+## Decisioni aperte del brief — RISOLTE in implementazione
 
-Riferimento: brief §8 e §12.
+Riferimento originale: brief §8 e §12. Tutte risolte nel ciclo 0.1.0–0.4.0:
 
-1. **MVP scope**: 3 tool read-only o 5 con almeno una write op (per validare il dry-run pattern)?
-2. **DT Server bridge**: progettare astrazione anche se non implementato in v1? Risk over-design.
-3. **Strategia test JXA**: mocking + integration su DT reale. Come automatizzare CI?
-4. **Tool versioning**: header version o suffisso `_v2` nel nome?
-5. **OAuth scope**: 5 attualmente proposti (`dt:read`, `dt:write`, `dt:delete`, `dt:bulk`, `dt:admin`). Granularità giusta?
+1. **MVP scope**: ✅ RISOLTO — 7 tool inclusi write op (`file_document`, `bulk_apply`) con dry-run pattern mandatory.
+2. **DT Server bridge**: ✅ RISOLTO — non astratto in v1 (evitato over-design); JXA bridge primario, difensivo (safe wrapper).
+3. **Strategia test JXA**: ✅ RISOLTO — mocking via fixture + cassette VCR (PR #49–#60) + integration test live skip-default; CI Ubuntu + macOS-14.
+4. **Tool versioning**: ✅ RISOLTO — nessun suffisso `_v2`; breaking changes gestiti via `SERVER_VERSION` + CHANGELOG (Keep a Changelog).
+5. **OAuth scope**: ✅ RISOLTO — ADR-006 (Accepted): 3 scope (non 5), database-scoping server-side, error code `RECONSENT_REQUIRED`.
 
 ---
 
@@ -82,3 +84,4 @@ Riferimento: brief §8 e §12.
 ## Log modifiche memory.md
 
 - **2026-04-30**: prima inizializzazione del file. Estratto stato dal brief v0.1.
+- **2026-05-16**: allineamento allo stato reale. Progetto in produzione (v0.4.0 rilasciata 2026-05-09, annuncio pubblicato). "Decisioni aperte" del brief marcate RISOLTE con riferimento all'implementazione. Storico operativo delegato a `handoff.md` + auto-memory.
