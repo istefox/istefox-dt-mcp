@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from istefox_dt_mcp_schemas.common import Database, Record
@@ -9,6 +10,10 @@ from istefox_dt_mcp_schemas.tools import (
     DatabaseListResource,
     RecordMetadataResource,
     RecordTextResource,
+)
+from istefox_dt_mcp_server.resources._common import (
+    RESOURCE_JSON_BUDGET_CHARS,
+    bound_json,
 )
 
 
@@ -52,3 +57,20 @@ def test_record_text_resource_roundtrip() -> None:
         "truncated": False,
         "returned_chars": 5,
     }
+
+
+def test_bound_json_small_payload_is_verbatim_and_sorted() -> None:
+    body = bound_json({"b": 2, "a": 1})
+    assert json.loads(body) == {"a": 1, "b": 2}
+    assert body.index('"a"') < body.index('"b"')  # sort_keys
+
+
+def test_bound_json_truncates_oversized_text_field() -> None:
+    huge = "x" * (RESOURCE_JSON_BUDGET_CHARS * 2)
+    body = bound_json(
+        {"uuid": "R", "text": huge, "truncated": False, "returned_chars": len(huge)}
+    )
+    assert len(body) <= RESOURCE_JSON_BUDGET_CHARS
+    parsed = json.loads(body)
+    assert parsed["truncated"] is True
+    assert parsed["returned_chars"] == len(parsed["text"])
