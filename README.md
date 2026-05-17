@@ -200,6 +200,8 @@ A DEVONthink 4 connector for MCP that goes beyond a 1:1 wrapper of the scripting
 
 The two write tools follow the preview-then-apply pattern: calling them with `dry_run=true` returns a preview plus a `preview_token` (the audit_id of the dry-run); a second call with `dry_run=false` plus `confirm_token=<preview_token>` actually applies the change. The returned `audit_id` enables selective `undo` via the CLI.
 
+**MCP Resources & Prompts** *(0.5.0)*: three read-only `dt://` resources — `dt://databases`, `dt://record/{uuid}/metadata`, `dt://record/{uuid}/text` — deterministic, bounded (≤25K token), consent-gated ([ADR-0009](docs/adr/0009-mcp-resources-prompts.md)); plus two template-only prompts, `weekly_review` and `triage_inbox`, that orchestrate the existing tools.
+
 Still on the post-MVP list: `create_smart_rule` — see [ADR-004](docs/adr/0004-mvp-tool-scope.md).
 
 ---

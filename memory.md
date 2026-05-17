@@ -8,9 +8,10 @@
 ## Stato corrente
 
 - **Fase**: Produzione. v0.4.0 rilasciata end-to-end (2026-05-09) — HTTP transport + OAuth 2.1 PKCE multi-device + scope enforcement + ConsentStore.
-- **Versione live**: v0.4.0 su GitHub Releases (bundle `.mcpb` 332 KB) + MCP Registry `io.github.istefox/dt-mcp`. Repo pubblico, MIT, solo `istefox` come contributor.
+- **0.5.0 (protocol-completeness)**: IMPLEMENTATA e testata sul branch `feat/0.5.0-mcp-resources-prompts` (MCP Resources + Prompts, ADR-0009). **NON ancora rilasciata**: manca il merge su `main` + l'esecuzione della pipeline release (GitHub Release + publish MCP Registry). Da eseguire manualmente dal maintainer.
+- **Versione live**: v0.4.0 su GitHub Releases (bundle `.mcpb` 332 KB) + MCP Registry `io.github.istefox/dt-mcp` — ancora 0.4.0 (0.5.0 non pubblicata). Repo pubblico, MIT, solo `istefox` come contributor.
 - **Annuncio 0.4.0**: pubblicato (r/devonthink + forum DEVONtechnologies "AI").
-- **Prossimo deliverable atteso**: nessuno schedulato. Opzioni aperte: token refresh + key rotation (0.5.0), RAG benchmark cross-corpus (ADR-008, bloccato su early adopter), smart rule #47 (DEFERRED, gap SDK DT4).
+- **Prossimo deliverable atteso**: merge + release pipeline 0.5.0. Opzioni aperte successive: token refresh + key rotation, RAG benchmark cross-corpus (ADR-008, bloccato su early adopter), smart rule #47 (DEFERRED, gap SDK DT4).
 - **Bloccanti**: nessuno.
 - **Nota**: lo storico operativo dettagliato vive in `handoff.md` + auto-memory; questo file tiene le decisioni architetturali consolidate e lo stato di alto livello.
 
@@ -85,3 +86,4 @@ Riferimento originale: brief §8 e §12. Tutte risolte nel ciclo 0.1.0–0.4.0:
 
 - **2026-04-30**: prima inizializzazione del file. Estratto stato dal brief v0.1.
 - **2026-05-16**: allineamento allo stato reale. Progetto in produzione (v0.4.0 rilasciata 2026-05-09, annuncio pubblicato). "Decisioni aperte" del brief marcate RISOLTE con riferimento all'implementazione. Storico operativo delegato a `handoff.md` + auto-memory.
+- **2026-05-17**: bundle protocol-completeness 0.5.0 — MCP Resources (`dt://databases`, `dt://record/{uuid}/metadata`, `dt://record/{uuid}/text`, read-only, deterministici, bounded ≤25K token, consent-gated) + MCP Prompts (`weekly_review`, `triage_inbox`, solo template) per ADR-0009. Riusa l'infra esistente (adapter JXA, ConsentStore, audit, scope): zero nuove dipendenze, zero nuovi script JXA. Implementato e testato (319 unit+contract green, integration test live + smoke step aggiunti) sul branch `feat/0.5.0-mcp-resources-prompts`. **Pending**: merge su `main` + esecuzione pipeline release (GitHub Release + publish MCP Registry) — fuori scope di questa sessione, da eseguire manualmente dal maintainer.

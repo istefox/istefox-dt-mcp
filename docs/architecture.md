@@ -138,6 +138,29 @@ In caso di errore: `AdapterError` catturato, tradotto via `Translator` (it.toml)
 
 ---
 
+## MCP Resources & Prompts (0.5.0)
+
+Completamento di protocollo: oltre ai 7 tool, il server espone tre
+**resource** read-only e due **prompt** template-only.
+
+- **Resource** (`apps/server/resources/`):
+  - `dt://databases` — database aperti, consent-filtered, uuid-sorted
+  - `dt://record/{uuid}/metadata` — scheda metadati (no body documento)
+  - `dt://record/{uuid}/text` — testo del record, troncato a un bound fisso
+- **Prompt** (`apps/server/prompts/`):
+  - `weekly_review`, `triage_inbox` — solo template, orchestrano i tool
+    esistenti (nessuna logica nuova lato server)
+
+Le resource **riusano l'infra esistente** (adapter JXA, ConsentStore,
+audit log, scope OAuth): **zero nuove dipendenze, zero nuovi script
+JXA**. Le letture passano dal gate `safe_resource` (scope + consent):
+a differenza di `safe_call`, un fallo **solleva** (`ReconsentRequiredError`
+/ scope insufficiente) invece di ritornare un envelope `success=False` —
+una resource MCP non ha forma envelope, quindi fail-closed via eccezione.
+Output deterministico, bounded ≤25K token. Vedi ADR-0009.
+
+---
+
 ## Componenti cross-cutting
 
 ### Audit log (`apps/server/audit.py`)
