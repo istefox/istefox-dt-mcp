@@ -14,7 +14,24 @@ the serialized payload, with text-field truncation as defense in depth.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from istefox_dt_mcp_adapter.errors import AdapterError
+
+from ..audit import timer
+from ..auth.consent import ReconsentRequiredError
+from ..auth.scope import (
+    InsufficientScopeError,
+    Scope,
+    current_context,
+    current_scopes,
+)
+from ..tools._common import OAUTH_INSUFFICIENT_SCOPE, RECONSENT_REQUIRED
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from ..deps import Deps
 
 # ~17K tokens at a conservative 3.5 chars/token — well under the 25K
 # Claude Code resource bound, leaving headroom for token-dense text.
@@ -49,3 +66,70 @@ def bound_json(payload: dict[str, Any]) -> str:
         }
         s = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     return s[:RESOURCE_JSON_BUDGET_CHARS]
+
+
+async def safe_resource(
+    *,
+    uri: str,
+    deps: Deps,
+    operation: Callable[[], Awaitable[dict[str, Any]]],
+) -> str:
+    """Run a resource builder behind the scope/consent/audit gate.
+
+    `operation` returns the payload dict; it may raise
+    `ReconsentRequiredError` (consent denied) or `AdapterError`. This
+    helper enforces `Scope.READ`, audits every outcome (success or
+    denial) with `tool_name="resource:<uri>"`, and *raises* on failure
+    so FastMCP surfaces an MCP protocol error.
+    """
+    ctx = current_context()
+    principal = ctx.principal_id if ctx is not None else "local"
+
+    if Scope.READ not in current_scopes():
+        deps.audit.append(
+            tool_name=f"resource:{uri}",
+            input_data={"uri": uri},
+            output_data=None,
+            duration_ms=0.0,
+            principal=principal,
+            error_code=OAUTH_INSUFFICIENT_SCOPE,
+        )
+        raise InsufficientScopeError(
+            required=Scope.READ,
+            granted=current_scopes(),
+            principal_id=ctx.principal_id if ctx is not None else None,
+        )
+
+    with timer() as t:
+        try:
+            payload = await operation()
+        except ReconsentRequiredError:
+            deps.audit.append(
+                tool_name=f"resource:{uri}",
+                input_data={"uri": uri},
+                output_data=None,
+                duration_ms=t.duration_ms,
+                principal=principal,
+                error_code=RECONSENT_REQUIRED,
+            )
+            raise
+        except AdapterError as e:
+            deps.audit.append(
+                tool_name=f"resource:{uri}",
+                input_data={"uri": uri},
+                output_data=None,
+                duration_ms=t.duration_ms,
+                principal=principal,
+                error_code=e.code.value,
+            )
+            raise
+
+    body = bound_json(payload)
+    deps.audit.append(
+        tool_name=f"resource:{uri}",
+        input_data={"uri": uri},
+        output_data={"bytes": len(body)},
+        duration_ms=t.duration_ms,
+        principal=principal,
+    )
+    return body

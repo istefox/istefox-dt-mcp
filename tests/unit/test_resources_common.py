@@ -5,15 +5,23 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+import pytest
 from istefox_dt_mcp_schemas.common import Database, Record
 from istefox_dt_mcp_schemas.tools import (
     DatabaseListResource,
     RecordMetadataResource,
     RecordTextResource,
 )
+from istefox_dt_mcp_server.auth.scope import (
+    InsufficientScopeError,
+    RequestContext,
+    reset_request_context,
+    set_request_context,
+)
 from istefox_dt_mcp_server.resources._common import (
     RESOURCE_JSON_BUDGET_CHARS,
     bound_json,
+    safe_resource,
 )
 
 
@@ -74,3 +82,34 @@ def test_bound_json_truncates_oversized_text_field() -> None:
     parsed = json.loads(body)
     assert parsed["truncated"] is True
     assert parsed["returned_chars"] == len(parsed["text"])
+
+
+@pytest.mark.asyncio
+async def test_safe_resource_returns_bound_body_and_audits(deps) -> None:
+    async def op() -> dict:
+        return {"ok": True}
+
+    body = await safe_resource(uri="dt://x", deps=deps, operation=op)
+    assert json.loads(body) == {"ok": True}
+    recent = deps.audit.list_recent(limit=1)
+    assert recent[0]["tool_name"] == "resource:dt://x"
+    assert recent[0]["error_code"] is None
+
+
+@pytest.mark.asyncio
+async def test_safe_resource_denies_when_read_scope_missing(deps) -> None:
+    ctx = RequestContext(principal_id="bob", granted_scopes=frozenset())
+    token = set_request_context(ctx)
+    try:
+        with pytest.raises(InsufficientScopeError):
+            await safe_resource(
+                uri="dt://x",
+                deps=deps,
+                operation=lambda: (_ for _ in ()).throw(
+                    AssertionError("operation must not run")
+                ),
+            )
+    finally:
+        reset_request_context(token)
+    recent = deps.audit.list_recent(limit=1)
+    assert recent[0]["error_code"] == "OAUTH_INSUFFICIENT_SCOPE"
