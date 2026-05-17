@@ -84,6 +84,16 @@ def test_bound_json_truncates_oversized_text_field() -> None:
     assert parsed["returned_chars"] == len(parsed["text"])
 
 
+def test_bound_json_non_text_oversized_returns_valid_error_json() -> None:
+    # No string `text` field + over budget → must still be valid JSON,
+    # not a corrupt hard slice.
+    payload = {"blob": "q" * (RESOURCE_JSON_BUDGET_CHARS * 2)}
+    body = bound_json(payload)
+    assert len(body) <= RESOURCE_JSON_BUDGET_CHARS
+    parsed = json.loads(body)  # must not raise
+    assert parsed == {"error": "RESOURCE_OVERSIZED", "truncated": True}
+
+
 @pytest.mark.asyncio
 async def test_safe_resource_returns_bound_body_and_audits(deps) -> None:
     async def op() -> dict:

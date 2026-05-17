@@ -49,8 +49,9 @@ def bound_json(payload: dict[str, Any]) -> str:
 
     Deterministic: `sort_keys=True`, `default=str`. If the payload
     exceeds the budget (only plausible for the text resource), truncate
-    its `text` field, mark `truncated`, and re-serialize. A final hard
-    slice guarantees the ceiling even in pathological cases.
+    its `text` field, mark `truncated`, and re-serialize. If still over
+    budget (non-text payload, or pathological text), emit a small valid
+    JSON error body instead of a corrupt slice.
     """
     s = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     if len(s) <= RESOURCE_JSON_BUDGET_CHARS:
@@ -65,7 +66,13 @@ def bound_json(payload: dict[str, Any]) -> str:
             "returned_chars": keep,
         }
         s = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
-    return s[:RESOURCE_JSON_BUDGET_CHARS]
+        if len(s) <= RESOURCE_JSON_BUDGET_CHARS:
+            return s
+    # Non-text payload, or text truncation still over budget: emit a
+    # small VALID JSON error body rather than a corrupt hard slice.
+    return json.dumps(
+        {"error": "RESOURCE_OVERSIZED", "truncated": True}, sort_keys=True
+    )
 
 
 async def safe_resource(
