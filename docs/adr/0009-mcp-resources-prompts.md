@@ -39,8 +39,11 @@ dell'infrastruttura 0.4.0 (adapter, ConsentStore, audit, scope).
 
 - Aumenta di poco il costo di contesto delle liste resource/prompt
   (3+2 voci, descrizioni ≤1 riga). Accettato; YAGNI sul resto.
-- La stima token è euristica (3.5 char/token, 60K char ≈30% headroom);
-  mitigata da test che asserisce il bound.
+- Il bound ≤25K token è enforced dal backstop sul corpo serializzato
+  (`RESOURCE_JSON_BUDGET_CHARS = 60_000`): a ~2.5 char/token
+  (peggior caso per il corpus target IT/EN/FR/DE) ≈ 24K token, sotto
+  il limite con headroom. Stima char-based (nessuna dipendenza
+  tokenizer, vincolo zero-new-deps); conservativa per le lingue target.
 - `total_chars` esatto non disponibile (richiederebbe JXA nuovo): deferito.
 
 ## Riferimenti

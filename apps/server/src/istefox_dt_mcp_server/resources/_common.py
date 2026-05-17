@@ -33,12 +33,22 @@ if TYPE_CHECKING:
 
     from ..deps import Deps
 
-# ~17K tokens at a conservative 3.5 chars/token — well under the 25K
-# Claude Code resource bound, leaving headroom for token-dense text.
-RESOURCE_MAX_CHARS = 60_000
+# Per-field cap on the record `text` (passed to get_record_text). The
+# *enforcing* ceiling on the whole resource body is
+# RESOURCE_JSON_BUDGET_CHARS below — keep this comfortably under it so
+# the JSON envelope + escaping never push a legitimate record past the
+# backstop (escaping rarely expands prose; structured fields are tiny).
+RESOURCE_MAX_CHARS = 45_000
 
-# Absolute ceiling on the serialized JSON payload (envelope + text).
-RESOURCE_JSON_BUDGET_CHARS = 80_000
+# Hard ceiling on the FULL serialized JSON body — this is what actually
+# enforces the CLAUDE.md §2.2 "≤25K token" bound. 60K chars ÷ a
+# conservative 2.5 chars/token (worst case for the IT/EN/FR/DE target
+# corpus: accented Latin, code, base64-ish) ≈ 24K tokens < 25K, with
+# headroom. Char-based (no tokenizer dependency, per the zero-new-deps
+# constraint); deliberately conservative for the project's actual
+# languages. CJK would tokenize denser, but it is out of the declared
+# target corpus.
+RESOURCE_JSON_BUDGET_CHARS = 60_000
 
 # Defensive cap on the tag list of a record metadata resource.
 MAX_TAGS = 100

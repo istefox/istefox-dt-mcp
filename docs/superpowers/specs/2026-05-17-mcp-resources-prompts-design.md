@@ -103,8 +103,8 @@ Smart group / immagine senza OCR ⇒ `text=""` (già gestito da `get_record_text
 In `resources/_common.py`:
 
 ```
-RESOURCE_MAX_CHARS = 60_000          # ≈17K token @ 3.5 char/token (conservativo), <25K
-RESOURCE_JSON_BUDGET_CHARS = 80_000  # tetto assoluto del payload serializzato
+RESOURCE_MAX_CHARS = 45_000          # cap per-campo sul text; sotto il backstop con margine
+RESOURCE_JSON_BUDGET_CHARS = 60_000  # tetto ENFORCING del corpo serializzato: ≈24K token @ 2.5 char/token (peggior caso IT/EN/FR/DE), <25K
 
 def bound_json(payload: dict) -> str:
     s = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
@@ -115,7 +115,7 @@ def bound_json(payload: dict) -> str:
     return s
 ```
 
-Il bound è garantito da: (a) `get_record_text(max_chars=60_000)` lato JXA, (b) `dt://databases` non porta mai contenuto, (c) backstop `RESOURCE_JSON_BUDGET_CHARS`. **Rischio dichiarato**: la stima token è euristica; testo token-dense (CJK, blob base64-like) potrebbe avvicinarsi al limite. Mitigazione: 60K char = ~30% di headroom sotto i 25K + un test che asserisce il bound (§7).
+Il bound è garantito da: (a) `get_record_text(max_chars=RESOURCE_MAX_CHARS)` lato JXA, (b) `dt://databases` non porta mai contenuto, (c) backstop `RESOURCE_JSON_BUDGET_CHARS = 60_000`. **Il bound enforcing è il backstop sul corpo serializzato, NON il cap per-campo sul text.** **Rischio dichiarato**: la stima è char-based (nessun tokenizer, vincolo zero-new-deps). A ~2.5 char/token (peggior caso per il corpus target dichiarato IT/EN/FR/DE: latino accentato, codice, base64-like) 60K char ≈ 24K token < 25K, con headroom; conservativa per le lingue target. Il CJK tokenizza più denso ma è fuori dal corpus target dichiarato. Mitigazione: backstop + un test che asserisce il bound (§7).
 
 ### 4.6 Prompts
 

@@ -20,6 +20,7 @@ from istefox_dt_mcp_server.auth.scope import (
 )
 from istefox_dt_mcp_server.resources._common import (
     RESOURCE_JSON_BUDGET_CHARS,
+    RESOURCE_MAX_CHARS,
     bound_json,
     safe_resource,
 )
@@ -92,6 +93,26 @@ def test_bound_json_non_text_oversized_returns_valid_error_json() -> None:
     assert len(body) <= RESOURCE_JSON_BUDGET_CHARS
     parsed = json.loads(body)  # must not raise
     assert parsed == {"error": "RESOURCE_OVERSIZED", "truncated": True}
+
+
+def test_bound_json_escaping_heavy_text_stays_within_budget() -> None:
+    # Worst-case JSON-escaping: chars that expand under json.dumps
+    # (", \, newline -> \n). Even at the text cap this must not exceed
+    # the body backstop, which is what enforces the CLAUDE.md §2.2
+    # token bound for the IT/EN/FR/DE target corpus.
+    assert RESOURCE_JSON_BUDGET_CHARS <= 60_000  # tightened §2.2 ceiling
+    assert RESOURCE_MAX_CHARS <= 50_000
+    nasty = '"\\\n' * (RESOURCE_MAX_CHARS // 3)
+    body = bound_json(
+        {
+            "uuid": "R-1",
+            "text": nasty,
+            "truncated": False,
+            "returned_chars": len(nasty),
+        }
+    )
+    assert len(body) <= RESOURCE_JSON_BUDGET_CHARS
+    json.loads(body)  # must remain valid JSON
 
 
 @pytest.mark.asyncio
