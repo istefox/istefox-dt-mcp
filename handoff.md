@@ -7,12 +7,13 @@
 ## Snapshot sessione corrente
 
 - **Data fine**: 2026-05-17
-- **Branch**: `feat/0.5.0-mcp-resources-prompts` (NON ancora mergiato su `main`; `main` resta a `v0.4.0`).
-- **Output principale**: **0.5.0 — protocol-completeness IMPLEMENTATA sul branch, PENDING merge + release pipeline**. MCP Resources + Prompts (ADR-0009): tre resource read-only `dt://databases`, `dt://record/{uuid}/metadata`, `dt://record/{uuid}/text` (deterministiche, bounded ≤25K token, consent-gated via `safe_resource`) + due prompt template-only `weekly_review`, `triage_inbox` che orchestrano i tool esistenti. Riusa l'infra esistente (adapter JXA, ConsentStore, audit, scope OAuth): **zero nuove dipendenze, zero nuovi script JXA**.
-  - PR1–PR4 landed sul branch: resource builders + consent gate, wiring `@mcp.resource`, prompts + wiring, bump `SERVER_VERSION` → `0.5.0`.
-  - PR5 (questa sessione): integration test live `tests/integration/test_resources_live.py` (skip-default), smoke E2E step `[resources]` in `scripts/smoke_e2e.py`, hardening commento consent gate load-bearing in `dt_resources.py`, release-docs bump (CHANGELOG/manifest/README/architecture/handoff/memory).
-  - Test: **319 unit+contract green** (311 unit + 8 contract), mypy + ruff + black clean. Integration/smoke validati dal maintainer su Mac reale.
-- **Cosa MANCA (fuori scope sessione)**: merge del branch su `main` + esecuzione **manuale** della pipeline release (`gh workflow run release.yml -f version=0.5.0` → tag → `publish-registry.yml`). Versione live resta v0.4.0 finché il maintainer non lancia la release. NESSUN comando remoto/push/gh/workflow eseguito in questa sessione.
+- **Branch**: `main` @ `aad4361` (in sync con origin/main). Tag `v0.5.0` **e** `v0.5.1` pushati — **entrambe le release RILASCIATE end-to-end**.
+- **Output principale**: **0.5.0 + 0.5.1 RILASCIATE.**
+  - **0.5.0 — protocol-completeness** (PR #67, merge `05288e1`): MCP Resources + Prompts (ADR-0009): 3 resource read-only `dt://databases`, `dt://record/{uuid}/metadata`, `dt://record/{uuid}/text` (deterministiche, bounded ≤25K token, consent-gated via `safe_resource` che *solleva* `ResourceError` italiano, NON envelope) + 2 prompt template-only `weekly_review`, `triage_inbox`. **Zero nuove dipendenze, zero nuovi JXA**, `contract.py`/adapter intatti. Sviluppata subagent-driven in 5 slice (TDD + doppia review per slice + review whole-feature). Fix post-review inclusi: structlog parity in `safe_resource` + `ResourceError` localizzato; tag metadata ordinati (determinismo G2); §2.2 token-bound irrigidito (`RESOURCE_JSON_BUDGET_CHARS=60_000`).
+  - **0.5.1 — patch** (PR #68, merge `aad4361`): `fix(packaging)` issue **#66 CLOSED**. Rimosso il `force-include` ridondante di `locales/it.toml` in `apps/server/pyproject.toml`: creava `site-packages/istefox_dt_mcp_server/` senza `__init__.py` (namespace-shadow PEP 420) che poteva oscurare il package editable `.pth`. `packages=["src/istefox_dt_mcp_server"]` spedisce già i locale nel wheel (verificato con build). + regression test `tests/unit/test_packaging.py`. Nota: su Py3.13 lo shadow era latente (shim bare funzionava); reporter su Py3.14 fallimento attivo.
+  - Pipeline: `release.yml` → tag → `publish-registry.yml` **auto-chain via RELEASE_PAT** OK per entrambe. MCP Registry mostra 0.1.0 → **0.5.1**.
+  - Test: **324 unit+contract green**, mypy + ruff + black clean; integration test live `test_resources_live.py` PASS su DT reale.
+- **Cosa MANCA**: nessuna azione bloccante. Vedi "Cose da fare".
 
 ---
 
@@ -47,8 +48,8 @@
 ## Stato corrente del progetto
 
 ### Versione live
-- **GitHub Releases**: `v0.4.0` (2026-05-09) — bundle .mcpb 332 KB, sha256 `a0c6f45e9448e98732d0003d075a4f88d8dcc4886e6cf2b9e4a84aa28d0b7ade`
-- **MCP Registry**: `io.github.istefox/dt-mcp` v0.4.0 (registry mostra tutte 0.1.0 + 0.2.0 + 0.3.0 + 0.4.0)
+- **GitHub Releases**: `v0.5.1` (2026-05-17) — bundle `istefox-dt-mcp-0.5.1.mcpb` (~340 KB, sha256 `2914354d5568ea89c501f3987a34d6b64b4b1f82a39477733132d14932dc4d70`)
+- **MCP Registry**: `io.github.istefox/dt-mcp` v0.5.1 (registry mostra 0.1.0 → 0.5.1)
 - **Repo**: pubblico, MIT, solo `istefox` come contributor
 
 ### 0.2.0 — landed e rilasciata
@@ -78,6 +79,15 @@ PR mergiate da inizio 0.2.0 (ordine cronologico):
 
 Follow-up issues aperte: nessuna. (Issue #63 chiusa 2026-05-08 dopo run live verde.)
 
+### 0.5.0 + 0.5.1 — landed e rilasciate (2026-05-17)
+
+| PR | Topic |
+|---|---|
+| #67 | feat: MCP Resources + Prompts (0.5.0 protocol-completeness) — 3 `dt://` resource + 2 prompt, ADR-0009, `safe_resource`; subagent-driven 5-slice + fix post-review (structlog parity, ResourceError IT, tag determinism, §2.2 bound) — merge `05288e1` |
+| #68 | fix(packaging): drop locales `force-include` shadowing editable package (#66) + `chore: release v0.5.1` + regression test `tests/unit/test_packaging.py` — merge `aad4361` |
+
+Issue **#66 CLOSED** (via PR #68). Bundle 0.5.1 sha256 `2914354d5568ea89c501f3987a34d6b64b4b1f82a39477733132d14932dc4d70`. Suite a 324 unit+contract.
+
 ### Test status (0.4.0 phase 4 baseline)
 - 286 unit + 8 contract test pass (294 totali) — era 222 a inizio 0.4.0
 - 8 integration test (skip default); round-trip drift di #63 verificato live PASS in 10.85s
@@ -102,12 +112,12 @@ Follow-up issues aperte: nessuna. (Issue #63 chiusa 2026-05-08 dopo run live ver
 
 ## Cose da fare prossima sessione
 
-0.4.0 è chiusa. Opzioni in ordine di valore:
+0.5.0 + 0.5.1 rilasciate, #66 chiusa. Opzioni in ordine di valore:
 
-1. **Annuncio 0.4.0** — questa è una release sostanziosa (HTTP transport + OAuth è il salto qualitativo che apre l'uso multi-device). Vale un post: r/devonthink (reply nel thread esistente o nuovo), forum DEVONtechnologies, eventualmente HN/Reddit MCP. Riusare il pattern del 0.3.0 (`docs/announcements/0.3.0.md`).
-2. **Smart rule (#47)** — è ancora DEFERRED. Niente da fare lato nostro finché DT4 non aggiorna lo SDK; se DT4 5.0 esce con la dictionary completa, potrebbe sbloccarsi.
-3. **RAG benchmark cross-corpus (ADR-008)** — bloccato in attesa di early adopter. Sarebbe utile ora che 0.4.0 abilita l'uso remoto (più probabile attirare adopter).
-4. **Token refresh + key rotation (0.5.0)** — l'attuale modello richiede re-consent ogni ora e secret rotation manuale. Gap noto.
+1. **Annuncio 0.5.0** — release sostanziosa (MCP Resources + Prompts: il plugin diventa cittadino MCP completo). Vale un post: r/devonthink (reply/nuovo thread), forum DEVONtechnologies subforum "AI", eventualmente HN/Reddit MCP. Riusare il pattern stile community confermato (vedi auto-memory `feedback_community_post_style`). 0.5.1 è un patch — citarlo solo come nota.
+2. **Smart rule (#47)** — ancora DEFERRED. Niente da fare lato nostro finché DT4 non aggiorna lo SDK; se DT4 5.0 esce con la dictionary completa, potrebbe sbloccarsi.
+3. **RAG benchmark cross-corpus (ADR-008)** — bloccato in attesa di early adopter. Più probabile attirare adopter ora che HTTP+Resources abilitano l'uso remoto.
+4. **Token refresh + key rotation** — gap noto: l'attuale modello richiede re-consent ogni ora e secret rotation manuale. Candidato 0.6.0.
 5. **Multi-tenancy reale (post-v1)** — richiede un layer di login a monte; per ora `principal_id=oauth-user` hardcoded.
 
 Note operative correnti:
@@ -149,8 +159,8 @@ Ultime PR (in ordine cronologico):
 ```bash
 cd ~/Developer/Devonthink_MCP
 git status               # → working tree pulito
-git log --oneline -5     # → ultimo commit PR #64
-uv run pytest tests/ -q  # → 222 pass (214 unit + 8 contract), 8 deselected
+git log --oneline -5     # → ultimo merge PR #68 (aad4361)
+uv run pytest tests/unit tests/contract -q  # → 324 pass, integration/benchmark deselected
 ```
 
 Re-cattura cassette (se mai serve):
