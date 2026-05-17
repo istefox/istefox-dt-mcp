@@ -51,6 +51,7 @@ async def _resolve_consented_record(deps: Deps, uuid: str) -> Record:
     if ctx is not None:
         db_uuid = record.database_uuid
         if not db_uuid:
+            # Sentinel: DB unverifiable for this principal — not a real UUID.
             raise ReconsentRequiredError(
                 principal_id=ctx.principal_id,
                 database_uuid="(unknown)",
@@ -72,6 +73,8 @@ async def build_record_metadata_payload(deps: Deps, uuid: str) -> dict[str, Any]
 
 
 async def build_record_text_payload(deps: Deps, uuid: str) -> dict[str, Any]:
+    # Load-bearing: resolves the record AND enforces the per-DB consent
+    # gate before any text is fetched. Do not inline get_record_text past it.
     record = await _resolve_consented_record(deps, uuid)
     text = await deps.adapter.get_record_text(uuid, max_chars=RESOURCE_MAX_CHARS)
     truncated = len(text) >= RESOURCE_MAX_CHARS
