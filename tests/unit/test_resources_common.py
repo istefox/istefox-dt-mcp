@@ -6,6 +6,9 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+import structlog
+from fastmcp.exceptions import ResourceError
+from istefox_dt_mcp_adapter.errors import RecordNotFoundError
 from istefox_dt_mcp_schemas.common import Database, Record
 from istefox_dt_mcp_schemas.tools import (
     DatabaseListResource,
@@ -13,11 +16,11 @@ from istefox_dt_mcp_schemas.tools import (
     RecordTextResource,
 )
 from istefox_dt_mcp_server.auth.scope import (
-    InsufficientScopeError,
     RequestContext,
     reset_request_context,
     set_request_context,
 )
+from istefox_dt_mcp_server.i18n import Translator
 from istefox_dt_mcp_server.resources._common import (
     RESOURCE_JSON_BUDGET_CHARS,
     RESOURCE_MAX_CHARS,
@@ -132,7 +135,7 @@ async def test_safe_resource_denies_when_read_scope_missing(deps) -> None:
     ctx = RequestContext(principal_id="bob", granted_scopes=frozenset())
     token = set_request_context(ctx)
     try:
-        with pytest.raises(InsufficientScopeError):
+        with pytest.raises(ResourceError) as ei:
             await safe_resource(
                 uri="dt://x",
                 deps=deps,
@@ -142,5 +145,39 @@ async def test_safe_resource_denies_when_read_scope_missing(deps) -> None:
             )
     finally:
         reset_request_context(token)
+    # Localized italian message surfaced to the MCP client, not a raw
+    # InsufficientScopeError repr.
+    assert "Accesso negato" in str(ei.value)
+    assert "dt:read" in str(ei.value)
     recent = deps.audit.list_recent(limit=1)
     assert recent[0]["error_code"] == "OAUTH_INSUFFICIENT_SCOPE"
+
+
+@pytest.mark.asyncio
+async def test_safe_resource_translates_adapter_error(deps) -> None:
+    async def op() -> dict:
+        raise RecordNotFoundError("R-404")
+
+    with pytest.raises(ResourceError) as ei:
+        await safe_resource(uri="dt://record/R-404/text", deps=deps, operation=op)
+    code = RecordNotFoundError("x").code
+    # Italian translation present, not the raw english exception text.
+    assert Translator().message_it(code) in str(ei.value)
+    recent = deps.audit.list_recent(limit=1)
+    assert recent[0]["error_code"] == code.value
+
+
+@pytest.mark.asyncio
+async def test_safe_resource_emits_and_unbinds_structlog_context(deps) -> None:
+    structlog.contextvars.clear_contextvars()
+
+    async def op() -> dict:
+        return {"ok": True}
+
+    await safe_resource(uri="dt://x", deps=deps, operation=op)
+
+    # No contextvar bleed across requests (parity with safe_call).
+    ctx = structlog.contextvars.get_contextvars()
+    assert "request_id" not in ctx
+    assert "audit_id" not in ctx
+    assert "tool" not in ctx

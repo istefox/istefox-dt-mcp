@@ -9,19 +9,26 @@ instead of producing an envelope.
 
 `bound_json` enforces the CLAUDE.md §2.2 size bound: a hard ceiling on
 the serialized payload, with text-field truncation as defense in depth.
+
+Every read is audited and logged with structlog parity to `safe_call`
+(`request_id`/`audit_id` contextvars + a structured event per outcome);
+failures surface to the MCP client as a localized italian
+`ResourceError` (FastMCP turns it into a protocol error).
 """
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
+import structlog
+from fastmcp.exceptions import ResourceError
 from istefox_dt_mcp_adapter.errors import AdapterError
 
 from ..audit import timer
 from ..auth.consent import ReconsentRequiredError
 from ..auth.scope import (
-    InsufficientScopeError,
     Scope,
     current_context,
     current_scopes,
@@ -32,6 +39,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from ..deps import Deps
+
+log = structlog.get_logger(__name__)
 
 # Per-field cap on the record `text` (passed to get_record_text). The
 # *enforcing* ceiling on the whole resource body is
@@ -96,57 +105,98 @@ async def safe_resource(
     `operation` returns the payload dict; it may raise
     `ReconsentRequiredError` (consent denied) or `AdapterError`. This
     helper enforces `Scope.READ`, audits every outcome (success or
-    denial) with `tool_name="resource:<uri>"`, and *raises* on failure
-    so FastMCP surfaces an MCP protocol error.
+    denial) with `tool_name="resource:<uri>"`, emits structlog events
+    bound to a `request_id`/`audit_id` (parity with `safe_call`), and
+    raises a localized italian `ResourceError` on failure so FastMCP
+    surfaces a clean MCP protocol error.
     """
     ctx = current_context()
     principal = ctx.principal_id if ctx is not None else "local"
+    request_id = str(uuid4())
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        tool=f"resource:{uri}",
+    )
+    try:
+        log.debug("resource_read_started", uri=uri)
 
-    if Scope.READ not in current_scopes():
-        deps.audit.append(
+        if Scope.READ not in current_scopes():
+            audit_id = deps.audit.append(
+                tool_name=f"resource:{uri}",
+                input_data={"uri": uri},
+                output_data=None,
+                duration_ms=0.0,
+                principal=principal,
+                error_code=OAUTH_INSUFFICIENT_SCOPE,
+            )
+            structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+            log.warning(
+                "resource_scope_denied",
+                required_scope=Scope.READ.value,
+                granted_scopes=sorted(s.value for s in current_scopes()),
+                principal=principal,
+            )
+            raise ResourceError(
+                "Accesso negato: la lettura di questa resource richiede "
+                "lo scope 'dt:read'. Riesegui il consent flow concedendo "
+                "'dt:read' al client."
+            )
+
+        with timer() as t:
+            try:
+                payload = await operation()
+            except ReconsentRequiredError as e:
+                audit_id = deps.audit.append(
+                    tool_name=f"resource:{uri}",
+                    input_data={"uri": uri},
+                    output_data=None,
+                    duration_ms=t.duration_ms,
+                    principal=principal,
+                    error_code=RECONSENT_REQUIRED,
+                )
+                structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+                log.warning(
+                    "resource_reconsent_required",
+                    principal=principal,
+                    database_uuid=e.database_uuid,
+                    database_name=e.database_name,
+                )
+                raise ResourceError(
+                    f"Il database {e.database_name!r} ({e.database_uuid}) "
+                    f"non è autorizzato per il client corrente. Riesegui "
+                    f"il consent flow e selezionalo nella lista di "
+                    f"autorizzazioni."
+                ) from e
+            except AdapterError as e:
+                audit_id = deps.audit.append(
+                    tool_name=f"resource:{uri}",
+                    input_data={"uri": uri},
+                    output_data=None,
+                    duration_ms=t.duration_ms,
+                    principal=principal,
+                    error_code=e.code.value,
+                )
+                structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+                log.warning(
+                    "resource_failed",
+                    error_code=e.code.value,
+                    duration_ms=round(t.duration_ms, 1),
+                )
+                recovery = e.recovery_hint or deps.translator.recovery_hint_it(e.code)
+                raise ResourceError(
+                    f"{deps.translator.message_it(e.code)} {recovery}"
+                ) from e
+
+        body = bound_json(payload)
+        audit_id = deps.audit.append(
             tool_name=f"resource:{uri}",
             input_data={"uri": uri},
-            output_data=None,
-            duration_ms=0.0,
+            output_data={"bytes": len(body)},
+            duration_ms=t.duration_ms,
             principal=principal,
-            error_code=OAUTH_INSUFFICIENT_SCOPE,
         )
-        raise InsufficientScopeError(
-            required=Scope.READ,
-            granted=current_scopes(),
-            principal_id=ctx.principal_id if ctx is not None else None,
-        )
-
-    with timer() as t:
-        try:
-            payload = await operation()
-        except ReconsentRequiredError:
-            deps.audit.append(
-                tool_name=f"resource:{uri}",
-                input_data={"uri": uri},
-                output_data=None,
-                duration_ms=t.duration_ms,
-                principal=principal,
-                error_code=RECONSENT_REQUIRED,
-            )
-            raise
-        except AdapterError as e:
-            deps.audit.append(
-                tool_name=f"resource:{uri}",
-                input_data={"uri": uri},
-                output_data=None,
-                duration_ms=t.duration_ms,
-                principal=principal,
-                error_code=e.code.value,
-            )
-            raise
-
-    body = bound_json(payload)
-    deps.audit.append(
-        tool_name=f"resource:{uri}",
-        input_data={"uri": uri},
-        output_data={"bytes": len(body)},
-        duration_ms=t.duration_ms,
-        principal=principal,
-    )
-    return body
+        structlog.contextvars.bind_contextvars(audit_id=str(audit_id))
+        log.info("resource_ok", duration_ms=round(t.duration_ms, 1))
+        return body
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id", "tool", "audit_id")
