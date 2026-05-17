@@ -45,7 +45,8 @@ preview their effect; the LLM must explicitly set dry_run=false to
 apply.
 
 Read-only `dt://` resources expose databases and individual records as
-referenceable context (bounded, consent-gated).
+referenceable context (bounded, consent-gated). Prebuilt prompts
+(`weekly_review`, `triage_inbox`) bundle common multi-tool workflows.
 """
 
 
