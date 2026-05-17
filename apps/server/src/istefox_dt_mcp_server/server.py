@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from .auth.middleware import ScopeMiddleware
 from .auth.routes import register_oauth_routes
 from .deps import build_default_deps
+from .prompts import dt_prompts as prompt_dt
 from .resources import dt_resources as resource_dt
 from .tools import ask_database as tool_ask_database
 from .tools import bulk_apply as tool_bulk_apply
@@ -68,6 +69,7 @@ def build_server(deps: Deps | None = None) -> FastMCP:
     tool_bulk_apply.register(mcp, deps)
     tool_summarize_topic.register(mcp, deps)
     resource_dt.register(mcp, deps)
+    prompt_dt.register(mcp, deps)
 
     # OAuth routes (0.4.0 phase 4): /oauth/authorize, /oauth/consent,
     # /oauth/token. Live alongside the MCP routes on the same ASGI app
