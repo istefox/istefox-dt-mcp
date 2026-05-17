@@ -15,6 +15,7 @@ Outputs latency stats useful for the W2 GO/NO-GO checkpoint
 from __future__ import annotations
 
 import asyncio
+import json
 import statistics
 import sys
 import time
@@ -132,6 +133,48 @@ async def main() -> int:
         stderr = getattr(e, "stderr", "")
         if stderr:
             print(f"    stderr: {stderr[:300]}")
+
+    # --- dt:// resources (0.5.0) ---
+    print("\n[resources]")
+    try:
+        from istefox_dt_mcp_server.deps import build_default_deps
+        from istefox_dt_mcp_server.resources._common import (
+            RESOURCE_JSON_BUDGET_CHARS,
+        )
+        from istefox_dt_mcp_server.resources.dt_resources import (
+            build_databases_payload,
+            build_record_metadata_payload,
+            build_record_text_payload,
+        )
+
+        smoke_deps = build_default_deps(cache_enabled=False)
+        seed_results = await adapter.search("the", max_results=1)
+        if seed_results:
+            seed_uuid = seed_results[0].uuid
+            samples, _ = await _measure(
+                "resource:databases",
+                lambda: build_databases_payload(smoke_deps),
+            )
+            all_samples["resource:databases"] = samples
+            samples, _ = await _measure(
+                "resource:record/metadata",
+                lambda: build_record_metadata_payload(smoke_deps, seed_uuid),
+            )
+            all_samples["resource:metadata"] = samples
+            samples, txt = await _measure(
+                "resource:record/text",
+                lambda: build_record_text_payload(smoke_deps, seed_uuid),
+            )
+            all_samples["resource:text"] = samples
+            body_len = len(json.dumps(txt))  # type: ignore[arg-type]
+            assert (
+                body_len <= RESOURCE_JSON_BUDGET_CHARS
+            ), f"resource text body {body_len} exceeds bound"
+            print(f"  text body bytes={body_len} (bound {RESOURCE_JSON_BUDGET_CHARS})")
+        else:
+            print("  no seed record available")
+    except AdapterError as e:
+        print(f"  FAIL: {type(e).__name__}: {e}")
 
     # --- W2 GO/NO-GO summary ---
     # Two latency tiers: cheap reads (list/get/search) vs expensive

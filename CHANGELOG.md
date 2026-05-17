@@ -3,6 +3,12 @@
 Tutti i cambiamenti rilevanti a `istefox-dt-mcp` sono documentati qui.
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [SemVer](https://semver.org/lang/it/).
 
+## [0.5.0] - 2026-05-17
+
+### Added
+- MCP Resources: `dt://databases`, `dt://record/{uuid}/metadata`, `dt://record/{uuid}/text` — read-only, deterministic, bounded (≤25K token), consent-gated (ADR-0009).
+- MCP Prompts: `weekly_review`, `triage_inbox` (template-only, orchestrate existing tools).
+
 ## [0.4.0] — 2026-05-09 — HTTP transport + OAuth 2.1 PKCE multi-device
 
 Quarta release: il server può ora servire client remoti (Claude.ai Web,

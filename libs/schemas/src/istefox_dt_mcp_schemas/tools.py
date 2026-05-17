@@ -22,6 +22,7 @@ from pydantic import Field, field_validator
 from .common import (
     Database,
     Envelope,
+    Record,
     RecordKind,
     RelatedResult,
     SearchResult,
@@ -462,3 +463,37 @@ class SummarizeTopicResult(StrictModel):
 
 class SummarizeTopicOutput(Envelope[SummarizeTopicResult]):
     pass
+
+
+# ----------------------------------------------------------------------
+# MCP resource payloads (0.5.0). These wrap the shared domain models so
+# resource bodies stay DRY and validated. They are OUTPUT payloads we
+# construct ourselves, hence StrictModel.
+# ----------------------------------------------------------------------
+
+
+class DatabaseListResource(StrictModel):
+    """Body of the `dt://databases` resource."""
+
+    databases: list[Database]
+    truncated: bool = False
+
+
+class RecordMetadataResource(StrictModel):
+    """Body of `dt://record/{uuid}/metadata` — the record card, no text.
+
+    `Record` already carries no document body, so it is reused whole.
+    `tags_truncated` flags a defensive cap applied by the builder.
+    """
+
+    record: Record
+    tags_truncated: bool = False
+
+
+class RecordTextResource(StrictModel):
+    """Body of `dt://record/{uuid}/text` — bounded plain text."""
+
+    uuid: str
+    text: str
+    truncated: bool
+    returned_chars: int

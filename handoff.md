@@ -6,6 +6,18 @@
 
 ## Snapshot sessione corrente
 
+- **Data fine**: 2026-05-17
+- **Branch**: `feat/0.5.0-mcp-resources-prompts` (NON ancora mergiato su `main`; `main` resta a `v0.4.0`).
+- **Output principale**: **0.5.0 — protocol-completeness IMPLEMENTATA sul branch, PENDING merge + release pipeline**. MCP Resources + Prompts (ADR-0009): tre resource read-only `dt://databases`, `dt://record/{uuid}/metadata`, `dt://record/{uuid}/text` (deterministiche, bounded ≤25K token, consent-gated via `safe_resource`) + due prompt template-only `weekly_review`, `triage_inbox` che orchestrano i tool esistenti. Riusa l'infra esistente (adapter JXA, ConsentStore, audit, scope OAuth): **zero nuove dipendenze, zero nuovi script JXA**.
+  - PR1–PR4 landed sul branch: resource builders + consent gate, wiring `@mcp.resource`, prompts + wiring, bump `SERVER_VERSION` → `0.5.0`.
+  - PR5 (questa sessione): integration test live `tests/integration/test_resources_live.py` (skip-default), smoke E2E step `[resources]` in `scripts/smoke_e2e.py`, hardening commento consent gate load-bearing in `dt_resources.py`, release-docs bump (CHANGELOG/manifest/README/architecture/handoff/memory).
+  - Test: **319 unit+contract green** (311 unit + 8 contract), mypy + ruff + black clean. Integration/smoke validati dal maintainer su Mac reale.
+- **Cosa MANCA (fuori scope sessione)**: merge del branch su `main` + esecuzione **manuale** della pipeline release (`gh workflow run release.yml -f version=0.5.0` → tag → `publish-registry.yml`). Versione live resta v0.4.0 finché il maintainer non lancia la release. NESSUN comando remoto/push/gh/workflow eseguito in questa sessione.
+
+---
+
+## Snapshot sessione precedente (0.4.0 release)
+
 - **Data fine**: 2026-05-08
 - **Branch**: `main` @ `3529cc4` (in sync con origin/main); **tag `v0.4.0` pushato — release 0.4.0 RILASCIATA end-to-end**
 - **Output principale**: **0.4.0 RILASCIATA**: HTTP transport + OAuth 2.1 PKCE multi-device + scope enforcement + ConsentStore + integration tests live + release polish. Tutte 5 fasi del plan complete.
