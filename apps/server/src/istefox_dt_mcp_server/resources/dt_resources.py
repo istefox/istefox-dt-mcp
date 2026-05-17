@@ -65,9 +65,13 @@ async def _resolve_consented_record(deps: Deps, uuid: str) -> Record:
 
 async def build_record_metadata_payload(deps: Deps, uuid: str) -> dict[str, Any]:
     record = await _resolve_consented_record(deps, uuid)
+    # G2 determinism: DEVONthink does not guarantee tag order, so a
+    # re-read of the same URI could differ. Sort (then cap) so the
+    # output is byte-identical for a fixed DT state.
     tags_truncated = len(record.tags) > MAX_TAGS
-    if tags_truncated:
-        record = record.model_copy(update={"tags": record.tags[:MAX_TAGS]})
+    norm_tags = sorted(record.tags)[:MAX_TAGS]
+    if norm_tags != record.tags:
+        record = record.model_copy(update={"tags": norm_tags})
     model = RecordMetadataResource(record=record, tags_truncated=tags_truncated)
     return model.model_dump(mode="json")
 

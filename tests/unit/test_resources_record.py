@@ -64,6 +64,18 @@ async def test_metadata_tags_capped(deps: Deps) -> None:
 
 
 @pytest.mark.asyncio
+async def test_metadata_tags_sorted_deterministically(deps: Deps) -> None:
+    deps.adapter.get_record.return_value = _record(  # type: ignore[attr-defined]
+        tags=["zeta", "alpha", "mid"]
+    )
+    a = await build_record_metadata_payload(deps, "R-1")
+    b = await build_record_metadata_payload(deps, "R-1")
+    assert a["record"]["tags"] == ["alpha", "mid", "zeta"]  # sorted (G2)
+    assert a == b  # byte-identical re-read for a fixed DT state
+    assert a["tags_truncated"] is False
+
+
+@pytest.mark.asyncio
 async def test_record_consent_denied_for_http_principal(deps: Deps) -> None:
     deps.adapter.get_record.return_value = _record()  # type: ignore[attr-defined]
     ctx = RequestContext(principal_id="bob", granted_scopes=frozenset({Scope.READ}))
