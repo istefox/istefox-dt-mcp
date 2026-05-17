@@ -100,3 +100,35 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             deps=deps,
             operation=lambda: build_databases_payload(deps),
         )
+
+    @mcp.resource(
+        "dt://record/{uuid}/metadata",
+        name="dt-record-metadata",
+        mime_type="application/json",
+        description=(
+            "Metadata card for one DEVONthink record (no document body). "
+            "Consent-gated, deterministic, read-only."
+        ),
+    )
+    async def dt_record_metadata(uuid: str) -> str:
+        return await safe_resource(
+            uri=f"dt://record/{uuid}/metadata",
+            deps=deps,
+            operation=lambda: build_record_metadata_payload(deps, uuid),
+        )
+
+    @mcp.resource(
+        "dt://record/{uuid}/text",
+        name="dt-record-text",
+        mime_type="application/json",
+        description=(
+            "Plain text of one DEVONthink record, truncated to a fixed "
+            "bound. Consent-gated, deterministic, read-only."
+        ),
+    )
+    async def dt_record_text(uuid: str) -> str:
+        return await safe_resource(
+            uri=f"dt://record/{uuid}/text",
+            deps=deps,
+            operation=lambda: build_record_text_payload(deps, uuid),
+        )
