@@ -3,6 +3,11 @@
 Tutti i cambiamenti rilevanti a `istefox-dt-mcp` sono documentati qui.
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioning [SemVer](https://semver.org/lang/it/).
 
+## [0.5.1] - 2026-05-17
+
+### Fixed
+- Packaging: dropped the redundant `force-include` of `locales/it.toml` in `apps/server/pyproject.toml`. It made the editable install materialize a `site-packages/istefox_dt_mcp_server/` directory without `__init__.py`, a PEP 420 namespace portion that could shadow the editable `.pth` regular package and break `from istefox_dt_mcp_server.cli import main` (issue #66). `packages = ["src/istefox_dt_mcp_server"]` already ships the locale data in the wheel (verified by build); the force-include only created the shadow.
+
 ## [0.5.0] - 2026-05-17
 
 ### Added

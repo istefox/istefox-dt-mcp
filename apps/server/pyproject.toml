@@ -45,6 +45,7 @@ istefox-dt-mcp-sidecar = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/istefox_dt_mcp_server"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/istefox_dt_mcp_server/locales/it.toml" = "istefox_dt_mcp_server/locales/it.toml"
+# Do NOT add a `force-include` mapping into `istefox_dt_mcp_server/`:
+# `packages` already ships locale data in the wheel, and a force-include
+# there makes the editable install materialize a
+# `site-packages/istefox_dt_mcp_server/` namespace shadow (issue #66).
